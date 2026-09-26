@@ -262,7 +262,7 @@ The `results.json` shape is documented below so you can type it precisely.
         "batch_sizes": 3,
         "thread_counts": 2,
         "latency_cells_per_config": 12,
-        "tests": 172, // counted from pytest, not hardcoded
+        "tests": 222, // counted from pytest, not hardcoded
     },
 
     "headline_config": { "resolution": 32, "batch_size": 1, "num_threads": 1 },

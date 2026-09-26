@@ -241,7 +241,8 @@ src/edgebench/
 └── pipeline.py        End-to-end train → optimize → measure → persist
 
 configs/     default.yaml, smoke.yaml, offline.yaml, models.yaml
-tests/       172 tests covering config, models, training, benchmarks, optimizations
+tests/       222 tests: config, models, training, benchmarks, optimizations,
+             CI assertions and repository hygiene
 scripts/
 ├── check_measurement_order.py   measurement-stability diagnostic
 ├── export_portfolio_assets.py   figures + metrics for the portfolio
