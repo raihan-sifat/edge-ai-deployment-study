@@ -26,12 +26,28 @@ name: Study (full, parallel by model)
 # exactly the suite one job would have produced.
 #
 # The epoch count is 10 rather than the 30 in configs/default.yaml, which is the
-# one deviation from the documented protocol and is stated in the results. Ten is
-# where the slowest architecture still fits inside the job ceiling with room for
-# the 224px sweep.
+# one deviation in the training protocol and is stated in the results. Ten is
+# where the slowest architecture still fits inside the job ceiling.
 #
-# Wall-clock is set by the slowest architecture, roughly 3.5 hours, not by the
-# sum of the five jobs.
+# The second deviation is the resolution, and it matters more. The published
+# sweep is 32x32 only. Cost here is dominated by the latency sweep rather than by
+# training: each rung re-measures every cell, and a cell is a fixed 260 forward
+# passes (10 warmup + 50 timed x 5 repeats), so sweep cost scales with per-forward
+# cost. At 224x224 batch 32 a ResNet-18 forward costs a measured 10.1 s, putting
+# that one cell pair -- two thread settings, before the other nine rungs -- near
+# 14 hours. No epoch count makes that fit a 360-minute job.
+#
+# 32x32 is also the more defensible axis. Every network here has its stem
+# re-engineered for 32x32 input (stride-1 3x3 conv, max-pool replaced by
+# identity), so evaluating at 224x224 measures a model outside the regime it was
+# adapted for and attributes part of the difference to the adaptation rather than
+# to input size. 224x224 stays available through configs/default.yaml for anyone
+# measuring on hardware they control.
+#
+# With 32x32 only, the slowest architecture projects to roughly 190 minutes
+# against the 355 ceiling.
+#
+# Wall-clock is set by the slowest architecture, not by the sum of the five jobs.
 
 on:
     workflow_dispatch:
@@ -47,9 +63,9 @@ on:
                 default: "fp32,compile,dynamic_int8,static_int8,qat_int8,prune_unstructured_30,prune_unstructured_50,prune_unstructured_70,onnxruntime,onnxruntime_int8"
                 type: string
             resolutions:
-                description: "Benchmark resolutions (must be a single group, no spaces)"
+                description: "Benchmark resolutions. 32 is published; 224 does not fit the job ceiling (no spaces)"
                 required: true
-                default: "[32,224]"
+                default: "[32]"
                 type: string
             batch_sizes:
                 description: "Benchmark batch sizes (must be a single group, no spaces)"

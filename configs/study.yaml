@@ -56,12 +56,19 @@ train:
 
 benchmark:
     device: cpu
-    # 224x224 is where these architectures were designed to run and is what an edge
-    # deployment usually receives, but it is ~10x the latency measurement cost of
-    # 32x32. Enable it explicitly when you want the resolution-sensitivity figure:
-    #   --set benchmark.resolutions=[32,224]
+    # 32x32 is the training resolution, and it is the resolution the published
+    # suite uses. 224x224 is not measured for the published results: at batch 32 a
+    # ResNet-18 forward pass costs a measured 10.1 s, and the sweep is 260 passes
+    # per cell across two thread settings and ten rungs, which puts that one cell
+    # pair near 14 hours. Costs are recorded in docs/REPORT.md section 5.7.
+    #
+    # There is also a methodological reason to prefer 32x32 here. Every network
+    # has its stem re-engineered for 32x32 input (see `data`/model adaptation), so
+    # evaluating at 224x224 measures a model outside the regime it was adapted for
+    # and partly measures the adaptation itself.
+    #   --set benchmark.resolutions=[32,224]   # available; not published
     resolutions: [32]
-    batch_sizes: [1, 8]
+    batch_sizes: [1, 8, 32]
     warmup_iters: 10
     timed_iters: 50
     repeats: 5

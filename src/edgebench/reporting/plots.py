@@ -355,6 +355,15 @@ def latency_vs_batch_size(
         axes.text(0.5, 0.5, "no data", ha="center", va="center")
         return figure
 
+    if data["batch_size"].nunique() < 2:
+        # Batch scaling is a trend across batch sizes; one point is not a trend.
+        # Same reasoning as resolution_sensitivity above: raise so the caller
+        # records an explicit gap instead of emitting a plot with no lines.
+        raise ValueError(
+            "batch scaling needs at least two measured batch sizes, but only "
+            f"{sorted(data['batch_size'].unique())} is present"
+        )
+
     models = sorted(data["model_id"].unique())
     for model_index, model in enumerate(models):
         for opt_index, optimization in enumerate(
@@ -413,6 +422,17 @@ def resolution_sensitivity(
         return figure
 
     resolutions = sorted(data["resolution"].unique())
+    if len(resolutions) < 2:
+        # A single resolution cannot show resolution sensitivity. Drawing one bar
+        # per model under a "Resolution sensitivity" title would suggest a
+        # comparison that was never made, which is worse than drawing nothing.
+        # Raising routes this into the caller's `skipped` list with a reason, so
+        # the figure is recorded as an explicit gap rather than a misleading chart.
+        raise ValueError(
+            "resolution sensitivity needs at least two measured resolutions, but only "
+            f"{resolutions[0] if resolutions else 'none'} is present"
+        )
+
     models = sorted(data["model_id"].unique())
     width = 0.8 / max(1, len(resolutions))
 

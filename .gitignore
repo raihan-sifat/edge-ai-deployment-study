@@ -62,6 +62,10 @@ docs/report.pdf
 node_modules/
 package-lock.json
 .package-lock.json
+# pnpm materialises its content-addressed store next to the install target, which
+# put a cache under .github/. Not a project artifact and not worth committing.
+.pnpm-store/
+**/.pnpm-store/
 
 # --- Notebooks --------------------------------------------------------------
 .ipynb_checkpoints/
@@ -75,3 +79,9 @@ package-lock.json
 *~
 .DS_Store
 Thumbs.db
+
+# --- Local working notes ----------------------------------------------------
+# Scratch notes kept beside the project while working on it. Not documentation:
+# some of it is tentative, and parts say things like "do not cite these numbers
+# yet", which would be confusing to a reader of the published case study.
+MEMORY.md

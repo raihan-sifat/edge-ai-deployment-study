@@ -63,8 +63,10 @@ Latency on a CPU is meaningless without stating the thread count, because the th
 count moves latency more than most of the optimizations being measured. Everything is
 reported on a grid rather than a single figure:
 
-- **Resolutions:** 32×32 and 224×224 — 49× the pixels. This exposes how the ranking
-  changes with input size, which a single resolution hides.
+- **Resolution:** 32×32, the training resolution. 224×224 is supported but not published:
+  at batch 32 it costs a measured 10.1 s per ResNet-18 forward pass, which puts one cell
+  pair near 14 hours across ten rungs. Stems here are also re-engineered for 32×32, so
+  224×224 would partly measure the adaptation rather than the input size.
 - **Batch sizes:** 1, 8, 32 — batch 1 is the realistic edge serving case.
 - **Thread counts:** 1 and all available — 1 thread is the honest proxy for a small
   edge core and cannot be bought back with more hardware.
@@ -193,7 +195,7 @@ results/
 │   ├── size_vs_accuracy.png               # marker area ∝ MACs
 │   ├── optimization_ladder__resnet18.png  # per-architecture deltas
 │   ├── latency_distribution__resnet18.png # raw per-iteration spread
-│   ├── resolution_sensitivity.png         # 32² vs 224²
+│   ├── resolution_sensitivity.png         # 32² vs 224², when both are measured
 │   ├── batch_scaling.png
 │   └── per_class_accuracy.png             # where quantization hurts
 ├── tables/

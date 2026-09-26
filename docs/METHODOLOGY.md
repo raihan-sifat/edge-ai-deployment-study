@@ -44,7 +44,7 @@ results tables carry an explicit `status` column.
 | Device        | CPU only, x86-64 and ARM-64                                                           |
 | Architectures | ResNet-18, MobileNetV2, MobileNetV3-Small, ShuffleNetV2-x1.0, EfficientNet-B0         |
 | Optimizations | Compilation, dynamic/static/QAT INT8 quantization, unstructured pruning, ONNX Runtime |
-| Resolution    | 32×32 and 224×224                                                                     |
+| Resolution    | 32×32 (the training resolution). 224×224 is supported but not published; see §8.3     |
 | Precision     | FP32 and INT8                                                                         |
 
 **Deliberately out of scope**

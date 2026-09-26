@@ -83,10 +83,10 @@ matter:
 
 ## 1.3 Scope
 
-CIFAR-10, CPU only, five architectures, six optimization families, resolutions 32×32 and
-224×224, batch sizes 1/8/32, thread counts 1 and all-available. Pretrained weights, GPUs,
-structured pruning and larger datasets are deliberately excluded; §9 states the reasoning
-and the resulting limitations.
+CIFAR-10, CPU only, five architectures, ten optimization rungs, at the 32×32 training
+resolution with batch sizes 1/8/32 and thread counts 1 and all-available. Pretrained
+weights, GPUs, structured pruning, 224×224 inputs and larger datasets are deliberately
+excluded; §9 states the reasoning and the resulting limitations.
 
 # 2. Related work
 
@@ -320,12 +320,28 @@ Two effects are expected and observable:
   while losing several points on one or two classes. Which classes depends on the
   architecture and the quantization scheme.
 
-## 5.7 Resolution changes the ranking **[measured]**
+## 5.7 Resolution sensitivity **[designed, not measured]**
 
-224×224 inputs are 49× the pixels of 32×32. The ratio of measured latencies
-(`results/tables/resolution_effect.md`) is the number a deployment actually plans
-against, and it is not 49: memory-bound layers scale with bytes touched, so the ratio is
-architecture-dependent.
+This was designed and then excluded on cost grounds, and the exclusion is recorded rather
+than quietly dropped.
+
+224×224 inputs are 49× the pixels of 32×32. The ratio of _measured_ latencies is the number
+a deployment actually plans against, and it is not 49: memory-bound layers scale with bytes
+touched, so the ratio is architecture-dependent. That measurement is not in this suite.
+
+The cost is dominated by the sweep rather than by training. Each rung re-measures every
+cell, and a cell is a fixed 260 forward passes (10 warm-up + 50 timed × 5 repeats), so
+sweep cost scales with per-forward cost. ResNet-18 at 224×224 with batch 32 costs a
+measured 10.1 s per forward pass on a CPU runner, which puts that single cell pair — two
+thread settings, before the other nine rungs — at roughly 14 hours. A hosted CI job is
+capped at 360 minutes, so no choice of epoch count makes the full-resolution sweep fit.
+
+There is also a methodological reason to prefer 32×32 for the published suite. Every
+network here has its stem re-engineered for 32×32 input (§3.2), so evaluating it at
+224×224 measures a model outside the regime it was adapted for, and part of any resulting
+difference is attributable to that adaptation rather than to input size. 224×224 remains
+available via `configs/default.yaml` or `--set benchmark.resolutions=[32,224]` for anyone
+measuring on hardware they control.
 
 # 6. Measurement order: a 404% error, and why it matters
 

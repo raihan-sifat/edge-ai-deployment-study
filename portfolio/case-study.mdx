@@ -374,10 +374,10 @@ I built this around the ways that goes wrong.
 | **Fabricated metrics**          | Energy is measured only where a real hardware counter exists. On Windows and macOS it reports `not measured` with the reason, instead of deriving a number from CPU utilisation.                                       |
 
 Two protocol decisions worth calling out. **Latency is reported across a grid, not as one
-number** — every configuration is measured at two resolutions (32×32 and 224×224, which is
-49× the pixels), three batch sizes and two thread counts. And **both per-iteration and
-block timing are recorded**, because below roughly 0.1 ms per inference the per-iteration
-timer itself becomes a material part of the measurement.
+number** — every configuration is measured at three batch sizes (batch 1 is the realistic
+edge serving case) and two thread counts. And **both per-iteration and block timing are
+recorded**, because below roughly 0.1 ms per inference the per-iteration timer itself
+becomes a material part of the measurement.
 
 ## Engineering notes
 

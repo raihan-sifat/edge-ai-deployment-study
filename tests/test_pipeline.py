@@ -146,6 +146,119 @@ def test_report_handles_an_empty_results_directory(tmp_path):
     assert "no records found" in artifacts.skipped
 
 
+# ---------------------------------------------------------------------------
+# Sweeps that need more than one point on their axis
+# ---------------------------------------------------------------------------
+
+
+def write_sweep_record(
+    root: Path,
+    cells: list[tuple[int, int]],
+    *,
+    model_id: str = "resnet18",
+    optimization_id: str = "fp32",
+) -> None:
+    """Write one record whose latency grid covers the given (resolution, batch) cells."""
+    latency = [
+        {
+            "resolution": resolution,
+            "batch_size": batch_size,
+            "num_threads": 1,
+            "status": "ok",
+            "latency_ms": 10.0 * resolution / 32,
+            "per_iteration": {"p50_ms": 10.0, "p95_ms": 14.0, "cv": 0.08},
+            "throughput_samples_per_s": 100.0 / batch_size,
+            "samples_ms": [9.5, 10.2, 10.1, 9.8],
+            "memory": {},
+            "energy": {},
+        }
+        for resolution, batch_size in cells
+    ]
+
+    record = BenchmarkRecord(
+        run_id="sweep-run",
+        model_id=model_id,
+        optimization_id=optimization_id,
+        status="applied",
+        accuracy={"top1": 0.9, "top5": 0.99, "loss": 0.3, "num_samples": 10000},
+        footprint={"weight_bytes": 44_000_000, "parameters": 11_000_000, "macs": 5.5e8},
+        latency=latency,
+        model_card=build_model_card(model_id, model_id, 10, 32, {"macs": 5.5e8}),
+        environment={"cpu": "test cpu", "platform": "test", "fingerprint": {"torch": "2.14"}},
+    )
+    json_dump(record.to_dict(), root / "raw" / f"{model_id}__{optimization_id}.json")
+
+
+def skipped_reason(artifacts, name: str) -> str | None:
+    for entry in artifacts.skipped:
+        if entry.startswith(f"{name}:"):
+            return entry
+    return None
+
+
+def test_single_resolution_skips_the_sensitivity_figure_with_a_reason(tmp_path):
+    """One resolution cannot show resolution sensitivity.
+
+    Drawing a single bar per model under a "Resolution sensitivity" title would
+    imply a comparison that was never made. The figure must be recorded as an
+    explicit gap instead, which is this project's pattern everywhere else.
+    """
+    write_sweep_record(tmp_path, [(32, 1), (32, 8)])
+
+    artifacts = build_report(tmp_path)
+    reason = skipped_reason(artifacts, "resolution_sensitivity")
+
+    assert reason is not None, "a single-resolution sweep must not render the figure"
+    assert "at least two measured resolutions" in reason
+    assert not (tmp_path / "figures" / "resolution_sensitivity.png").exists()
+
+
+def test_two_resolutions_render_the_sensitivity_figure(tmp_path):
+    write_sweep_record(tmp_path, [(32, 1), (224, 1)])
+
+    artifacts = build_report(tmp_path)
+
+    assert skipped_reason(artifacts, "resolution_sensitivity") is None
+    assert (tmp_path / "figures" / "resolution_sensitivity.png").exists()
+
+
+def test_single_batch_size_skips_the_batch_scaling_figure_with_a_reason(tmp_path):
+    """Batch scaling is a trend across batch sizes; one point is not a trend."""
+    write_sweep_record(tmp_path, [(32, 1), (224, 1)])
+
+    artifacts = build_report(tmp_path)
+    reason = skipped_reason(artifacts, "batch_scaling")
+
+    assert reason is not None
+    assert "at least two measured batch sizes" in reason
+
+
+def test_two_batch_sizes_render_the_batch_scaling_figure(tmp_path):
+    write_sweep_record(tmp_path, [(32, 1), (32, 8)])
+
+    artifacts = build_report(tmp_path)
+
+    assert skipped_reason(artifacts, "batch_scaling") is None
+    assert (tmp_path / "figures" / "batch_scaling.png").exists()
+
+
+def test_the_published_scope_still_produces_the_headline_figure(tmp_path):
+    """32x32 at batch 1/8/32 — the suite that is actually published.
+
+    The two guarded sweeps cover a single axis each, so this checks the guards did
+    not accidentally take the headline figure down with them.
+    """
+    write_sweep_record(tmp_path, [(32, 1), (32, 8), (32, 32)])
+
+    artifacts = build_report(tmp_path)
+
+    assert skipped_reason(artifacts, "accuracy_vs_latency") is None
+    assert (tmp_path / "figures" / "accuracy_vs_latency.png").exists()
+    assert skipped_reason(artifacts, "batch_scaling") is None
+    # Only the resolution sweep is expected to be missing.
+    assert skipped_reason(artifacts, "resolution_sensitivity") is not None
+
+
 def test_malformed_record_is_skipped_not_fatal(tmp_path):
     raw = tmp_path / "raw"
     raw.mkdir(parents=True)
