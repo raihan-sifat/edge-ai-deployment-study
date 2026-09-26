@@ -1,0 +1,207 @@
+name: Study (full, parallel by model)
+
+# The single-job study is bounded by GitHub's 360-minute job ceiling, and one
+# ResNet-18 epoch on a CPU runner costs roughly 15-20 minutes measured. Thirty
+# epochs of ResNet-18 alone is therefore more than that ceiling affords, before
+# the other four architectures or the 224px latency sweep are even considered:
+#
+#   measured locally at batch 128, 32x32, 8 threads, extrapolated to 45k images
+#     resnet18             15.2 min/epoch   ->  457 min at 30 epochs
+#     efficientnet_b0       8.4 min/epoch   ->  251 min
+#     mobilenet_v2          7.1 min/epoch   ->  213 min
+#     shufflenet_v2         6.3 min/epoch   ->  188 min
+#     mobilenet_v3_small    2.1 min/epoch   ->   63 min
+#     ---------------------------------------------------------------
+#     total                                     ~1199 min  (~20 hours)
+#
+# A CI runner is not faster than this: the `Real CIFAR-10 data path` job in
+# ci.yml trains one epoch and benchmarks it in 26.9 min, which is consistent with
+# the per-epoch figures above.
+#
+# So the work is partitioned by architecture instead of squeezed into one job.
+# Five jobs run concurrently, each producing records for one model, and a merge
+# job assembles them. This is sound because reporting is already a pure function
+# of stored records -- `load_records` reads every `*.json` under `raw/` and skips
+# anything without a `model_id`, so concatenating five jobs' records yields
+# exactly the suite one job would have produced.
+#
+# The epoch count is 10 rather than the 30 in configs/default.yaml, which is the
+# one deviation from the documented protocol and is stated in the results. Ten is
+# where the slowest architecture still fits inside the job ceiling with room for
+# the 224px sweep.
+#
+# Wall-clock is set by the slowest architecture, roughly 3.5 hours, not by the
+# sum of the five jobs.
+
+on:
+    workflow_dispatch:
+        inputs:
+            epochs:
+                description: "Training epochs per architecture"
+                required: true
+                default: "10"
+                type: string
+            optimizations:
+                description: "Comma-separated optimization ids"
+                required: true
+                default: "fp32,compile,dynamic_int8,static_int8,qat_int8,prune_unstructured_30,prune_unstructured_50,prune_unstructured_70,onnxruntime,onnxruntime_int8"
+                type: string
+            resolutions:
+                description: "Benchmark resolutions (must be a single group, no spaces)"
+                required: true
+                default: "[32,224]"
+                type: string
+            batch_sizes:
+                description: "Benchmark batch sizes (must be a single group, no spaces)"
+                required: true
+                default: "[1,8,32]"
+                type: string
+
+concurrency:
+    group: study-full-${{ github.ref }}
+    cancel-in-progress: false
+
+env:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PYTHONUNBUFFERED: "1"
+
+jobs:
+    measure:
+        name: Measure ${{ matrix.model }}
+        runs-on: ubuntu-latest
+        # 355 leaves headroom under GitHub's 360-minute hard ceiling.
+        timeout-minutes: 355
+        strategy:
+            # One slow or unlucky architecture must not discard the other four.
+            fail-fast: false
+            matrix:
+                model:
+                    - resnet18
+                    - mobilenet_v2
+                    - mobilenet_v3_small
+                    - shufflenet_v2
+                    - efficientnet_b0
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-python@v7
+              with:
+                  python-version: "3.11"
+                  cache: pip
+
+            - name: Install CPU PyTorch
+              run: |
+                  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+            - name: Install package
+              run: |
+                  pip install -e ".[onnx]"
+
+            - name: Cache CIFAR-10
+              uses: actions/cache@v6
+              with:
+                  path: data
+                  key: cifar10-torchvision-v1
+
+            - name: Report what this runner can measure
+              run: |
+                  edgebench info --config configs/study.yaml
+
+            - name: Train and benchmark ${{ matrix.model }}
+              run: |
+                  edgebench run-all \
+                    --config configs/study.yaml \
+                    --models "${{ matrix.model }}" \
+                    --optimizations "${{ inputs.optimizations }}" \
+                    --set train.epochs=${{ inputs.epochs }} \
+                    --set "benchmark.resolutions=${{ inputs.resolutions }}" \
+                    --set "benchmark.batch_sizes=${{ inputs.batch_sizes }}" \
+                    --no-memory \
+                    --no-report
+
+            # Uploaded before any assertion runs, so a failure later in the
+            # pipeline never costs this architecture's training time.
+            - name: Upload records for ${{ matrix.model }}
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: raw-${{ matrix.model }}
+                  path: results/study/raw
+                  if-no-files-found: warn
+                  retention-days: 90
+
+    merge:
+        name: Merge and verify the full suite
+        needs: measure
+        # Runs even if one architecture failed, so a partial suite can still be
+        # assembled and reported rather than throwing away twenty job-hours.
+        if: always()
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-python@v7
+              with:
+                  python-version: "3.11"
+                  cache: pip
+
+            - name: Install CPU PyTorch
+              run: |
+                  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+            - name: Install package
+              run: |
+                  pip install -e ".[onnx]"
+
+            - name: Collect every architecture's records
+              uses: actions/download-artifact@v7
+              with:
+                  pattern: raw-*
+                  # All five artifacts collapse into one records directory. The
+                  # `_run__<id>.json` metadata files from the separate jobs
+                  # coexist harmlessly; `read_run_config` takes the newest and
+                  # `load_records` ignores anything without a model_id.
+                  merge-multiple: true
+                  path: results/study/raw
+
+            - name: Show what was collected
+              run: |
+                  echo "records: $(find results/study/raw -name '*__*.json' ! -name '_*' | wc -l)"
+                  echo "models : $(find results/study/raw -name '*__*.json' ! -name '_*' -exec basename {} \; | cut -d_ -f1 | sort -u | tr '\n' ' ')"
+
+            - name: Build the report
+              run: edgebench report --results results/study
+
+            - name: Export portfolio assets from the real run
+              run: python scripts/export_portfolio_assets.py --results results/study
+
+            - name: Verify the results are real and the provisional guard did not fire
+              run: python scripts/ci_assert_study.py
+
+            - name: Summarise into the job summary
+              if: always()
+              run: python scripts/ci_summarise_study.py >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload the full results
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: study-results-full
+                  path: |
+                      results/study/raw
+                      results/study/tables
+                      results/study/figures
+                  if-no-files-found: warn
+                  retention-days: 90
+
+            - name: Upload the portfolio assets, ready to commit
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: portfolio-assets-full
+                  path: |
+                      portfolio/data
+                      portfolio/images
+                  if-no-files-found: warn
+                  retention-days: 90

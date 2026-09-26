@@ -150,7 +150,17 @@ blocks, inverted bottlenecks, squeeze-and-excitation, channel shuffle — is unc
 One recipe for all five architectures: SGD (momentum 0.9, Nesterov), learning rate 0.1,
 weight decay 5e-4 excluding biases and normalization parameters, 1-epoch linear warmup
 followed by cosine decay, batch size 128, label smoothing 0.1, gradient clipping at
-max-norm 1.0, 30 epochs, seed 1234. Selection is best-on-validation.
+max-norm 1.0, seed 1234. Selection is best-on-validation.
+
+The schedule is **10 epochs**, not the 30 in `configs/default.yaml`. This is a compute
+constraint, stated rather than hidden: measurement puts one ResNet-18 epoch on a CPU
+runner at roughly 16 minutes, so 30 epochs across five architectures is about 20 hours of
+single-machine training, which no hosted CI job can afford. The suite is therefore
+partitioned by architecture and each part given 10 epochs. The deviation lowers absolute
+accuracy and is discussed in §9.2; it does not change the relative comparisons the study
+is about, with the caveat that quantization sensitivity depends somewhat on how accurate
+the starting model is. `configs/default.yaml` retains 30 epochs for anyone running this
+on a machine they own.
 
 Uniform recipes trade absolute accuracy for comparability (§9.2).
 

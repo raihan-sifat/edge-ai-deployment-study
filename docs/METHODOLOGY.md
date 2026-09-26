@@ -418,11 +418,15 @@ from a machine running other work are not comparable to results from a quiet one
 
 ### 8.3 Absolute accuracy
 
-30 epochs at learning rate 0.1 is a reasonable budget for CIFAR-10 but is not
-state-of-the-art; longer schedules and stronger augmentation would raise every number.
-This affects absolute accuracy, not the relative differences the study is about — with
-the caveat that quantization _sensitivity_ does depend somewhat on the accuracy of the
-starting model.
+The published suite trains for 10 epochs at learning rate 0.1 rather than the 30 in
+`configs/default.yaml`. `configs/default.yaml` remains the reference recipe; 10 is what a
+hosted CPU runner can afford, since a single ResNet-18 epoch measures at roughly 16
+minutes and the full five-architecture suite at 30 epochs is about 20 hours of CPU time.
+The consequence is stated plainly: 10 epochs is a reasonable budget for CIFAR-10 but is
+not state-of-the-art, and longer schedules and stronger augmentation would raise every
+number. This affects absolute accuracy, not the relative differences the study is about —
+with the caveat that quantization _sensitivity_ does depend somewhat on the accuracy of
+the starting model.
 
 ### 8.4 Architecture-specific quantization sensitivity
 

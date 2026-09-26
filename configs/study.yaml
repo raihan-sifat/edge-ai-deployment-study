@@ -70,6 +70,12 @@ benchmark:
 
 # The full ladder. Rungs that cannot run on the host are recorded as
 # `unavailable` with a reason and appear as explicit gaps in the tables.
+#
+# All ten registered rungs are listed here on purpose. `enabled_optimizations`
+# filters this list rather than adding to it, so a rung absent from this file
+# cannot be selected by `--optimizations` -- naming it raises ConfigError. The
+# set of rungs is therefore declared here and narrowed from the CLI, never the
+# other way round.
 optimizations:
     - id: fp32
       enabled: true
@@ -81,7 +87,11 @@ optimizations:
       enabled: true
     - id: qat_int8
       enabled: true
+    - id: prune_unstructured_30
+      enabled: true
     - id: prune_unstructured_50
+      enabled: true
+    - id: prune_unstructured_70
       enabled: true
     - id: onnxruntime
       enabled: true
