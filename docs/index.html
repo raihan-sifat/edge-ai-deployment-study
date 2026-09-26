@@ -1,0 +1,1203 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>
+            Benchmarking Efficient Deep Learning Models for Edge AI Deployment
+        </title>
+        <meta
+            name="description"
+            content="A reproducible CPU benchmark of quantization, pruning, compilation and runtime substitution for edge AI deployment. Includes verified negative results: dynamic INT8 quantization can be slower than FP32, and unstructured pruning delivers neither compression nor speedup."
+        />
+        <style>
+            :root {
+                --bg: #ffffff;
+                --bg-soft: #f6f8fa;
+                --bg-code: #f6f8fa;
+                --fg: #1f2328;
+                --fg-muted: #59636e;
+                --border: #d1d9e0;
+                --accent: #0969da;
+                --accent-soft: #ddf4ff;
+                --good: #1a7f37;
+                --bad: #cf222e;
+                --warn: #9a6700;
+                --shadow:
+                    0 1px 3px rgba(31, 35, 40, 0.08),
+                    0 6px 20px rgba(31, 35, 40, 0.06);
+                --mono:
+                    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                    "Liberation Mono", monospace;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #0d1117;
+                    --bg-soft: #151b23;
+                    --bg-code: #151b23;
+                    --fg: #e6edf3;
+                    --fg-muted: #9198a1;
+                    --border: #3d444d;
+                    --accent: #4493f8;
+                    --accent-soft: #121d2f;
+                    --good: #3fb950;
+                    --bad: #f85149;
+                    --warn: #d29922;
+                    --shadow:
+                        0 1px 3px rgba(0, 0, 0, 0.4),
+                        0 6px 20px rgba(0, 0, 0, 0.3);
+                }
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+            html {
+                scroll-behavior: smooth;
+            }
+            body {
+                margin: 0;
+                background: var(--bg);
+                color: var(--fg);
+                font:
+                    16px/1.65 -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    Helvetica,
+                    Arial,
+                    sans-serif;
+                -webkit-font-smoothing: antialiased;
+            }
+            .wrap {
+                max-width: 60rem;
+                margin: 0 auto;
+                padding: 0 1.5rem;
+            }
+
+            /* ---------- hero ---------- */
+            header.hero {
+                border-bottom: 1px solid var(--border);
+                background: var(--bg-soft);
+                padding: 4.5rem 0 3.5rem;
+            }
+            .hero .eyebrow {
+                font: 600 0.78rem/1 var(--mono);
+                letter-spacing: 0.09em;
+                text-transform: uppercase;
+                color: var(--accent);
+                margin: 0 0 1.1rem;
+            }
+            .hero h1 {
+                font-size: clamp(1.9rem, 4.2vw, 2.7rem);
+                line-height: 1.15;
+                letter-spacing: -0.02em;
+                margin: 0 0 1rem;
+                max-width: 34ch;
+            }
+            .hero .lede {
+                font-size: 1.16rem;
+                color: var(--fg-muted);
+                max-width: 56ch;
+                margin: 0 0 1.8rem;
+            }
+            .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.6rem 1.15rem;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 0.94rem;
+                text-decoration: none;
+                border: 1px solid var(--border);
+                color: var(--fg);
+                background: var(--bg);
+                transition:
+                    border-color 0.15s,
+                    background 0.15s,
+                    transform 0.1s;
+            }
+            .btn:hover {
+                border-color: var(--accent);
+                transform: translateY(-1px);
+            }
+            .btn.primary {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+            .btn.primary:hover {
+                filter: brightness(1.08);
+            }
+
+            /* ---------- layout ---------- */
+            main {
+                padding: 3.5rem 0 5rem;
+            }
+            section {
+                margin-bottom: 3.75rem;
+                scroll-margin-top: 1.5rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+                letter-spacing: -0.01em;
+                margin: 0 0 1.1rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid var(--border);
+            }
+            h3 {
+                font-size: 1.06rem;
+                margin: 2rem 0 0.6rem;
+            }
+            p {
+                margin: 0.85rem 0;
+            }
+            a {
+                color: var(--accent);
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+            code {
+                background: var(--bg-code);
+                padding: 0.15em 0.38em;
+                border-radius: 5px;
+                font: 0.88em/1.5 var(--mono);
+            }
+            pre {
+                background: var(--bg-code);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1.1rem 1.2rem;
+                overflow-x: auto;
+                font-size: 0.86rem;
+                line-height: 1.6;
+            }
+            pre code {
+                background: none;
+                padding: 0;
+                font-size: inherit;
+            }
+            ul {
+                padding-left: 1.35rem;
+            }
+            li {
+                margin: 0.4rem 0;
+            }
+
+            /* ---------- stat strip ---------- */
+            .stats {
+                display: grid;
+                gap: 1px;
+                grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+                background: var(--border);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                overflow: hidden;
+                margin: 1.75rem 0;
+            }
+            .stat {
+                background: var(--bg);
+                padding: 1.15rem 1.25rem;
+            }
+            .stat .label {
+                font-size: 0.76rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: var(--fg-muted);
+                margin-bottom: 0.35rem;
+            }
+            .stat .value {
+                font: 700 1.5rem/1.2 var(--mono);
+                letter-spacing: -0.02em;
+            }
+            .stat .value.top1 {
+                color: var(--fg);
+            }
+            .stat .note {
+                font-size: 0.8rem;
+                color: var(--fg-muted);
+                margin-top: 0.3rem;
+            }
+
+            /* ---------- findings ---------- */
+            .finding {
+                border: 1px solid var(--border);
+                border-left-width: 3px;
+                border-radius: 8px;
+                padding: 1.15rem 1.3rem;
+                margin: 1.1rem 0;
+                background: var(--bg-soft);
+            }
+            .finding.negative {
+                border-left-color: var(--bad);
+            }
+            .finding.positive {
+                border-left-color: var(--good);
+            }
+            .finding.caution {
+                border-left-color: var(--warn);
+            }
+            .finding h3 {
+                margin: 0 0 0.5rem;
+                font-size: 1rem;
+                display: flex;
+                gap: 0.55rem;
+                align-items: baseline;
+            }
+            .tag {
+                font: 700 0.7rem/1 var(--mono);
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                padding: 0.25em 0.5em;
+                border-radius: 4px;
+                white-space: nowrap;
+            }
+            .tag.negative {
+                background: color-mix(in srgb, var(--bad) 14%, transparent);
+                color: var(--bad);
+            }
+            .tag.positive {
+                background: color-mix(in srgb, var(--good) 14%, transparent);
+                color: var(--good);
+            }
+            .tag.caution {
+                background: color-mix(in srgb, var(--warn) 16%, transparent);
+                color: var(--warn);
+            }
+            .finding p:last-child {
+                margin-bottom: 0;
+            }
+
+            /* ---------- tables ---------- */
+            .table-scroll {
+                overflow-x: auto;
+                margin: 1.4rem 0;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                font-size: 0.875rem;
+                min-width: 34rem;
+            }
+            th,
+            td {
+                padding: 0.6rem 0.85rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+            }
+            th {
+                background: var(--bg-soft);
+                font-weight: 600;
+                font-size: 0.79rem;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                color: var(--fg-muted);
+                white-space: nowrap;
+            }
+            tbody tr:last-child td {
+                border-bottom: none;
+            }
+            td.num {
+                font-family: var(--mono);
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            td.good {
+                color: var(--good);
+                font-weight: 600;
+            }
+            td.bad {
+                color: var(--bad);
+                font-weight: 600;
+            }
+            td.mute {
+                color: var(--fg-muted);
+            }
+            .swatch {
+                display: inline-block;
+                width: 9px;
+                height: 9px;
+                border-radius: 2px;
+                margin-right: 0.45rem;
+                vertical-align: middle;
+            }
+
+            /* ---------- figures ---------- */
+            figure {
+                margin: 1.6rem 0;
+            }
+            figure img {
+                width: 100%;
+                height: auto;
+                display: block;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                background: #fff;
+            }
+            figcaption {
+                font-size: 0.84rem;
+                color: var(--fg-muted);
+                margin-top: 0.7rem;
+                line-height: 1.5;
+            }
+            .figure-missing {
+                border: 1px dashed var(--border);
+                border-radius: 10px;
+                padding: 2.5rem 1.5rem;
+                text-align: center;
+                color: var(--fg-muted);
+                font-size: 0.9rem;
+                background: var(--bg-soft);
+            }
+            .figure-missing code {
+                font-size: 0.85em;
+            }
+
+            /* ---------- misc ---------- */
+            .cmd {
+                position: relative;
+                background: var(--bg-code);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1.1rem 1.2rem;
+                font: 0.86rem/1.8 var(--mono);
+                overflow-x: auto;
+                white-space: pre;
+            }
+            .cmd .comment {
+                color: var(--fg-muted);
+            }
+            blockquote {
+                margin: 1.4rem 0;
+                padding: 0.2rem 1.2rem;
+                border-left: 3px solid var(--border);
+                color: var(--fg-muted);
+            }
+            footer {
+                border-top: 1px solid var(--border);
+                background: var(--bg-soft);
+                padding: 2.5rem 0;
+                font-size: 0.88rem;
+                color: var(--fg-muted);
+            }
+            footer a {
+                color: var(--fg-muted);
+                text-decoration: underline;
+            }
+            .footer-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1.25rem;
+                margin-bottom: 1rem;
+            }
+            @media (max-width: 640px) {
+                header.hero {
+                    padding: 3rem 0 2.5rem;
+                }
+                main {
+                    padding: 2.5rem 0 3.5rem;
+                }
+                section {
+                    margin-bottom: 2.75rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header class="hero">
+            <div class="wrap">
+                <p class="eyebrow">
+                    Edge AI &middot; Model Compression &middot; Benchmarking
+                </p>
+                <h1>
+                    Benchmarking Efficient Deep Learning Models for Edge AI
+                    Deployment
+                </h1>
+                <p class="lede">
+                    A reproducible CPU harness that measures what actually
+                    happens when you compress a neural network for the edge
+                    &mdash; and reports the three cases where the standard
+                    advice quietly fails.
+                </p>
+                <div class="actions">
+                    <a
+                        class="btn primary"
+                        href="https://github.com/raihan-sifat/edge-ai-deployment-study"
+                    >
+                        View source on GitHub
+                    </a>
+                    <a class="btn" href="REPORT.md">Technical report</a>
+                    <a class="btn" href="METHODOLOGY.md">Methodology</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="wrap">
+            <!-- ==================== PROBLEM ==================== -->
+            <section id="problem">
+                <h2>The problem with "just quantize it"</h2>
+                <p>
+                    The standard advice for deploying a model to an edge device
+                    is a short list: pick an efficient architecture, quantize to
+                    INT8, compile the graph, prune the weights, use an optimized
+                    runtime. Every item is individually well-supported. Applied
+                    together, the advice is underspecified in ways that matter.
+                </p>
+                <p>
+                    "Quantize to INT8" describes at least
+                    <strong>four different procedures</strong> &mdash; dynamic,
+                    post-training static, quantization-aware training, and
+                    runtime-specific graph quantization &mdash; with different
+                    accuracy, different file sizes and, in one case, latency
+                    that moves in the <em>wrong direction</em>. Published
+                    speedups are typically quoted against whatever baseline the
+                    author had, at a batch size and thread count that go
+                    unstated, on different hardware.
+                </p>
+                <p>
+                    This project fixes one protocol, measures every optimization
+                    against the same architecture's own baseline, and reports
+                    the results that contradict expectations.
+                </p>
+            </section>
+
+            <!-- ==================== HEADLINE ==================== -->
+            <section id="results">
+                <h2>What the benchmark measures</h2>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="label">Architectures</div>
+                        <div class="value top1">5</div>
+                        <div class="note">
+                            ResNet-18, MobileNetV2, MobileNetV3-S, ShuffleNetV2,
+                            EfficientNet-B0
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Optimizations</div>
+                        <div class="value top1">10</div>
+                        <div class="note">
+                            Compilation, 4&times; quantization, pruning,
+                            2&times; ONNX Runtime
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Latency cells</div>
+                        <div class="value top1">12</div>
+                        <div class="note">
+                            Per config: 2 resolutions &times; 3 batch sizes
+                            &times; 2 thread counts
+                        </div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Tests</div>
+                        <div class="value top1">172</div>
+                        <div class="note">
+                            Covering config, models, training, benchmarks,
+                            optimizations
+                        </div>
+                    </div>
+                </div>
+
+                <h3>Headline comparison</h3>
+                <p>
+                    ResNet-18 on CIFAR-10, measured at batch&nbsp;1 on a single
+                    thread at 32&times;32 &mdash; the least flattering
+                    configuration available, and the closest analogue to a small
+                    edge core serving one request at a time.
+                </p>
+
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Optimization</th>
+                                <th style="text-align: right">Weights</th>
+                                <th style="text-align: right">Size &Delta;</th>
+                                <th style="text-align: right">Top-1</th>
+                                <th style="text-align: right">&Delta; Top-1</th>
+                                <th style="text-align: right">Latency p50</th>
+                                <th style="text-align: right">Speedup</th>
+                                <th>Verdict</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <code>fp32</code>
+                                    <span
+                                        class="mute"
+                                        style="color: var(--fg-muted)"
+                                        >baseline</span
+                                    >
+                                </td>
+                                <td class="num">42.70 MiB</td>
+                                <td class="num mute">&mdash;</td>
+                                <td class="num">11.72%</td>
+                                <td class="num mute">&mdash;</td>
+                                <td class="num">17.91 ms</td>
+                                <td class="num">1.00&times;</td>
+                                <td class="mute">Reference</td>
+                            </tr>
+                            <tr>
+                                <td><code>static_int8</code></td>
+                                <td class="num">10.78 MiB</td>
+                                <td class="num good">&minus;74.8%</td>
+                                <td class="num">10.74%</td>
+                                <td class="num bad">&minus;0.98 pp</td>
+                                <td class="num">5.75 ms</td>
+                                <td class="num good">3.12&times;</td>
+                                <td>Best size/speed trade</td>
+                            </tr>
+                            <tr>
+                                <td><code>qat_int8</code></td>
+                                <td class="num">10.78 MiB</td>
+                                <td class="num good">&minus;74.8%</td>
+                                <td class="num">8.98%</td>
+                                <td class="num bad">&minus;2.73 pp</td>
+                                <td class="num">5.34 ms</td>
+                                <td class="num good">3.35&times;</td>
+                                <td>+ fine-tuning cost</td>
+                            </tr>
+                            <tr>
+                                <td><code>dynamic_int8</code></td>
+                                <td class="num">42.68 MiB</td>
+                                <td class="num bad">&minus;0.03%</td>
+                                <td class="num">11.52%</td>
+                                <td class="num">&minus;0.20 pp</td>
+                                <td class="num">23.30 ms</td>
+                                <td class="num bad">0.77&times;</td>
+                                <td class="bad">Slower, no size win</td>
+                            </tr>
+                            <tr>
+                                <td><code>prune_unstructured_50</code></td>
+                                <td class="num">42.70 MiB</td>
+                                <td class="num bad">&minus;0.00%</td>
+                                <td class="num">11.72%</td>
+                                <td class="num">&minus;0.00 pp</td>
+                                <td class="num">17.95 ms</td>
+                                <td class="num bad">1.01&times;</td>
+                                <td class="bad">Neither smaller nor faster</td>
+                            </tr>
+                            <tr>
+                                <td><code>compile</code></td>
+                                <td
+                                    class="num mute"
+                                    colspan="6"
+                                    style="
+                                        text-align: left;
+                                        color: var(--fg-muted);
+                                    "
+                                >
+                                    unavailable &mdash; Inductor needs a working
+                                    C++ toolchain (<code
+                                        >InvalidCxxCompiler: Compiler: cl is not
+                                        found</code
+                                    >)
+                                </td>
+                                <td class="mute">Reported, not hidden</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <blockquote>
+                    <p>
+                        Accuracy is near chance because these runs used
+                        synthetic data to validate the pipeline offline. The
+                        <em>structure</em> of the results &mdash; which
+                        optimizations help, which do not, and why &mdash; is
+                        what the harness measures, and it reproduces with real
+                        data. Run <code>edgebench run-all</code> to generate the
+                        table for your hardware.
+                    </p>
+                </blockquote>
+            </section>
+
+            <!-- ==================== FINDINGS ==================== -->
+            <section id="findings">
+                <h2>Findings</h2>
+                <p>
+                    Three results contradict the standard advice. They are the
+                    reason this project exists.
+                </p>
+
+                <div class="finding negative">
+                    <h3>
+                        <span class="tag negative">Slower</span> Dynamic INT8
+                        quantization made the model 1.3&times; slower
+                    </h3>
+                    <p>
+                        Dynamic quantization converts <code>Linear</code> layers
+                        but leaves <code>Conv2d</code> in FP32 on this PyTorch
+                        build. A convolutional network holds the overwhelming
+                        majority of its parameters in convolutions, so the
+                        footprint barely moved &mdash; while every batch paid
+                        added quantize/dequantize work.
+                    </p>
+                    <p>
+                        The harness detects this condition rather than hiding
+                        it: it inspects the build's own dynamic quantization
+                        mappings, and when convolutions are excluded the result
+                        carries the note that it describes
+                        <em>classifier</em> quantization, not model
+                        quantization.
+                    </p>
+                </div>
+
+                <div class="finding negative">
+                    <h3>
+                        <span class="tag negative">No win</span> Unstructured
+                        pruning delivered neither compression nor speedup
+                    </h3>
+                    <p>
+                        At 50% sparsity, global magnitude pruning produced a
+                        model statistically indistinguishable from FP32 in both
+                        size and latency. Three independent reasons:
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Dense storage ignores zeros.</strong>
+                            <code>torch.save</code> writes dense tensors;
+                            zeroing values changes neither shapes nor file size.
+                        </li>
+                        <li>
+                            <strong>Dense kernels ignore sparsity.</strong>
+                            oneDNN and MKL-DNN convolution paths have no
+                            sparsity fast path for arbitrary masks. Measured:
+                            <strong>1.01&times;</strong>.
+                        </li>
+                        <li>
+                            <strong>Sparse encoding loses below 50%.</strong> A
+                            float32 value plus an int32 index costs
+                            <strong>8 bytes</strong> per surviving weight
+                            against 4 bytes dense, so break-even is
+                            <em>exactly</em> 50% &mdash; and row pointers tip it
+                            the wrong way there.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="finding caution">
+                    <h3>
+                        <span class="tag caution">Methodology</span> Measurement
+                        order produced a 404% error
+                    </h3>
+                    <p>
+                        The first full sequential run reported pruning as
+                        <strong>4.16&times; slower</strong>
+                        than FP32. That is implausible: pruning leaves dense
+                        tensors, so dense kernels must be unaffected.
+                    </p>
+                    <p>
+                        Re-measuring the same two models interleaved, in
+                        opposite orders, gave
+                        <strong>1.01&times;</strong>. The 4.16&times; was drift
+                        in machine state over the ~5 minutes of sequential
+                        measurement &mdash; thermal throttling plus background
+                        load. The protocol looked entirely reasonable: warm-up,
+                        many iterations, multiple repeats, medians. None of that
+                        catches drift <em>between</em> configurations, because
+                        each one is internally self-consistent.
+                    </p>
+                    <p>
+                        The harness now records the coefficient of variation for
+                        every cell and flags anything above 15% as
+                        <code>unstable</code> in the output tables, and
+                        <code>scripts/check_measurement_order.py</code>
+                        reproduces the diagnostic.
+                    </p>
+                </div>
+
+                <div class="finding positive">
+                    <h3>
+                        <span class="tag positive">Works</span> Static INT8
+                        quantization returns 3.1&times; at 75% smaller
+                    </h3>
+                    <p>
+                        Post-training static quantization, with activation
+                        ranges calibrated on held-out validation data, gave the
+                        largest speedup of any rung and a ~4&times; reduction in
+                        serialized weight size. QAT recovered accuracy at the
+                        cost of a one-time fine-tuning pass.
+                    </p>
+                    <p>
+                        Stated caveat: FX graph mode performs
+                        <strong>conv+BN+ReLU fusion</strong>
+                        automatically, so part of this speedup is fusion, not
+                        precision. Both belong in a realistic pipeline, but
+                        attributing the whole effect to INT8 would be wrong.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ==================== FIGURES ==================== -->
+            <section id="figures">
+                <h2>Figures</h2>
+                <p>
+                    Every figure is generated by
+                    <code>edgebench report</code> from the raw JSON measurement
+                    records &mdash; never from a live model. A chart can always
+                    be traced back to the run that produced it, and any figure
+                    can be regenerated on any machine from a results directory
+                    alone.
+                </p>
+
+                <figure>
+                    <img
+                        src="../results/offline/figures/accuracy_vs_latency.png"
+                        alt="Scatter plot of test top-1 accuracy against single-thread batch-1 latency, one series per architecture, on a logarithmic latency axis."
+                        loading="lazy"
+                        onerror="
+                            this.parentElement.innerHTML =
+                                '&lt;div class=&quot;figure-missing&quot;&gt;Run &lt;code&gt;edgebench run-all&lt;/code&gt; to generate &lt;code&gt;accuracy_vs_latency.png&lt;/code&gt;&lt;/div&gt;'
+                        "
+                    />
+                    <figcaption>
+                        <strong>Accuracy vs latency.</strong> Test top-1 against
+                        single-thread batch-1 latency, log axis, one series per
+                        architecture. The most important figure: it answers what
+                        a given accuracy budget costs.
+                    </figcaption>
+                </figure>
+
+                <figure>
+                    <img
+                        src="../results/offline/figures/optimization_ladder__resnet18.png"
+                        alt="Two stacked bar charts for ResNet-18: speedup versus FP32 per optimization, and change in top-1 accuracy in percentage points."
+                        loading="lazy"
+                        onerror="
+                            this.parentElement.innerHTML =
+                                '&lt;div class=&quot;figure-missing&quot;&gt;Run &lt;code&gt;edgebench run-all&lt;/code&gt; to generate &lt;code&gt;optimization_ladder__resnet18.png&lt;/code&gt;&lt;/div&gt;'
+                        "
+                    />
+                    <figcaption>
+                        <strong>Optimization ladder.</strong> Speedup (top) and
+                        accuracy change in percentage points (bottom) per rung.
+                        Two panels rather than a dual axis, which would invite
+                        misreading the crossing point.
+                    </figcaption>
+                </figure>
+
+                <figure>
+                    <img
+                        src="../results/offline/figures/latency_distribution__resnet18.png"
+                        alt="Box plots of per-iteration latency samples for each optimization, with individual samples overlaid as jittered points."
+                        loading="lazy"
+                        onerror="
+                            this.parentElement.innerHTML =
+                                '&lt;div class=&quot;figure-missing&quot;&gt;Run &lt;code&gt;edgebench run-all&lt;/code&gt; to generate &lt;code&gt;latency_distribution__resnet18.png&lt;/code&gt;&lt;/div&gt;'
+                        "
+                    />
+                    <figcaption>
+                        <strong>Latency distribution.</strong> Every individual
+                        sample, not just the median. A wide box or a long upper
+                        tail is a bigger practical problem than a slightly
+                        higher median &mdash; and it is what a summary table
+                        hides.
+                    </figcaption>
+                </figure>
+
+                <figure>
+                    <img
+                        src="../results/offline/figures/size_vs_accuracy.png"
+                        alt="Scatter plot of serialized weight size against test accuracy, with marker area proportional to multiply-accumulates."
+                        loading="lazy"
+                        onerror="
+                            this.parentElement.innerHTML =
+                                '&lt;div class=&quot;figure-missing&quot;&gt;Run &lt;code&gt;edgebench run-all&lt;/code&gt; to generate &lt;code&gt;size_vs_accuracy.png&lt;/code&gt;&lt;/div&gt;'
+                        "
+                    />
+                    <figcaption>
+                        <strong>Size vs accuracy.</strong> Marker area is
+                        proportional to MACs, so a point's vertical position,
+                        horizontal position and size together say what a model
+                        costs in flash, in accuracy and in compute.
+                    </figcaption>
+                </figure>
+
+                <figure>
+                    <img
+                        src="../results/offline/figures/per_class_accuracy.png"
+                        alt="Heatmap of per-class accuracy change in percentage points versus the FP32 baseline, one row per model and optimization."
+                        loading="lazy"
+                        onerror="
+                            this.parentElement.innerHTML =
+                                '&lt;div class=&quot;figure-missing&quot;&gt;Run &lt;code&gt;edgebench run-all&lt;/code&gt; to generate &lt;code&gt;per_class_accuracy.png&lt;/code&gt;&lt;/div&gt;'
+                        "
+                    />
+                    <figcaption>
+                        <strong>Where quantization hurts.</strong> Aggregate
+                        top-1 hides a model that collapses on one or two
+                        classes, which is usually unacceptable in practice.
+                    </figcaption>
+                </figure>
+            </section>
+
+            <!-- ==================== RIGOUR ==================== -->
+            <section id="rigour">
+                <h2>What makes the numbers trustworthy</h2>
+                <p>
+                    Most benchmark repositories report one number per
+                    configuration from one run on one machine. This one is built
+                    around the ways that goes wrong.
+                </p>
+
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Risk</th>
+                                <th>How it is handled</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Test-set contamination</strong></td>
+                                <td>
+                                    A fixed seeded permutation carves 5,000
+                                    images out of the <em>train</em> split for
+                                    validation. Quantizer calibration draws from
+                                    that split, never from the test set. The
+                                    10,000 test images are measured exactly once
+                                    per configuration.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <strong>Measurement-order artifacts</strong>
+                                </td>
+                                <td>
+                                    Every cell records its coefficient of
+                                    variation; tables flag
+                                    <code>cv &gt; 0.15</code> as
+                                    <code>unstable</code> rather than averaging
+                                    it away. A diagnostic script reproduces the
+                                    404% error described above.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Hidden unavailability</strong></td>
+                                <td>
+                                    An optimization that cannot run is recorded
+                                    as <code>unavailable</code> with its reason,
+                                    and appears in the results as an explicit
+                                    gap. It never silently disappears from the
+                                    matrix.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Unit ambiguity</strong></td>
+                                <td>
+                                    MACs &ne; FLOPs, and the two differ by
+                                    2&times;. One convention is fixed globally
+                                    (1&nbsp;MAC = 1 multiply-accumulate, FLOPs =
+                                    2&nbsp;&times;&nbsp;MACs) and stated in the
+                                    output itself.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <strong>Irreproducible environments</strong>
+                                </td>
+                                <td>
+                                    Every record embeds CPU model, thread count,
+                                    PyTorch/NumPy/ONNX&nbsp;Runtime versions,
+                                    Python version, RAM, OS and git commit.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Fabricated metrics</strong></td>
+                                <td>
+                                    Energy is measured only where a real
+                                    hardware counter exists (Linux RAPL). On
+                                    Windows and macOS it reports
+                                    <code>not measured</code> with the reason,
+                                    instead of deriving a number from CPU
+                                    utilisation.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>Two protocol decisions worth calling out</h3>
+                <p>
+                    <strong
+                        >Latency is reported across a grid, not as one
+                        number.</strong
+                    >
+                    On a CPU the thread count moves latency more than several of
+                    the optimizations being compared, so thread count is an
+                    explicit axis rather than an ambient condition. Every
+                    configuration is measured at 32&times;32 and 224&times;224
+                    (49&times; the pixels), at batch sizes 1, 8 and 32, on 1
+                    thread and on all threads.
+                </p>
+                <p>
+                    <strong
+                        >Both per-iteration and block timing are
+                        recorded.</strong
+                    >
+                    Per-iteration timing is what makes the latency distribution
+                    visible, but below roughly 0.1&nbsp;ms the timer itself
+                    becomes a material fraction of the measurement. A separate
+                    pass times many forwards inside one timer, which is the
+                    trustworthy figure at the fast end. Reporting only one of
+                    the two would be misleading in one direction or the other.
+                </p>
+            </section>
+
+            <!-- ==================== DESIGN ==================== -->
+            <section id="design">
+                <h2>Engineering notes</h2>
+                <p>
+                    Three decisions shaped most of the code, and each one exists
+                    because of a failure mode rather than a preference.
+                </p>
+
+                <h3>
+                    The optimization ladder is fault tolerant by construction
+                </h3>
+                <p>
+                    Every optimization returns an outcome whose status is one of
+                    <code>applied</code>, <code>unavailable</code> or
+                    <code>failed</code>, with a machine-readable reason. A
+                    missing dependency or an unsupported operator costs one row
+                    of the results table, never the run. That property is what
+                    makes the negative results reportable: without it, an
+                    optimization that fails on your machine simply vanishes, and
+                    you report a smaller matrix without noticing.
+                </p>
+                <p>
+                    Each rung also operates on an independent deep copy of the
+                    trained model, which makes the ladder order-independent.
+                    <code>torch.compile</code> and FX quantization both mutate
+                    module graphs in place, so sharing one instance would make
+                    results depend on execution order.
+                </p>
+
+                <h3>Reporting is a pure function of stored results</h3>
+                <p>
+                    Records are written to disk the moment they are produced. A
+                    sweep that dies at hour three still leaves three hours of
+                    usable data, and a figure can always be traced to the
+                    measurement behind it. No forward pass is executed to build
+                    a chart, so
+                    <code>edgebench report</code> regenerates every table and
+                    figure on any machine from <code>results/raw/</code> alone
+                    &mdash; no model, no dataset, no GPU.
+                </p>
+
+                <h3>Unmeasurable metrics are reported as unmeasurable</h3>
+                <p>
+                    No energy counter means <code>not measured</code>, not an
+                    estimate derived from CPU utilisation or TDP. This is a
+                    deliberate constraint: a benchmark whose weakest metric is
+                    fabricated stops being a benchmark. The same principle
+                    governs memory, where the sampling interval is recorded so
+                    the reader can judge the precision, and MAC counting, where
+                    a failure yields <code>null</code> rather than a guess.
+                </p>
+
+                <h3>Two bugs worth remembering</h3>
+                <ul>
+                    <li>
+                        <strong>Scheduler contracts.</strong> Wrapping
+                        <code>torch.optim.lr_scheduler</code> is a trap:
+                        <code>StepLR.step()</code> returns <code>None</code> and
+                        is meant to advance once per epoch, while a cosine
+                        schedule for this study advances per step. Mixing the
+                        two conventions silently decays at the wrong rate. Fixed
+                        with a <code>LearningRateSchedule</code> ABC where every
+                        schedule returns the rate it applied &mdash; and a test
+                        that asserts exactly that for every implementation.
+                    </li>
+                    <li>
+                        <strong>Quantization namespaces.</strong> Recent PyTorch
+                        exposes <code>onednn</code> as a quantization
+                        <em>engine</em> name while still accepting
+                        <code>x86</code> and <code>fbgemm</code> as
+                        <em>qconfig</em> names. Treating them as one namespace
+                        meant reporting "static INT8 unavailable" on a machine
+                        where it worked perfectly.
+                    </li>
+                </ul>
+            </section>
+
+            <!-- ==================== REPRODUCE ==================== -->
+            <section id="reproduce">
+                <h2>Reproduce it</h2>
+                <p>
+                    Check what your machine can actually measure
+                    <em>before</em> committing hours to a run &mdash; this
+                    reports which optimizations will apply and which will be
+                    recorded as unavailable.
+                </p>
+
+                <div class="cmd">
+                    <span class="comment"
+                        ># install (CPU-only PyTorch is the target)</span
+                    >
+                    pip install torch torchvision --index-url
+                    https://download.pytorch.org/whl/cpu pip install -e
+                    ".[onnx,dev]"
+
+                    <span class="comment"
+                        ># what does this machine support?</span
+                    >
+                    edgebench info
+
+                    <span class="comment"
+                        ># validate the whole pipeline offline in minutes, no
+                        download</span
+                    >
+                    edgebench run-all --config configs/offline.yaml
+
+                    <span class="comment"
+                        ># check measurement stability on your hardware</span
+                    >
+                    python scripts/check_measurement_order.py
+
+                    <span class="comment"
+                        ># the study: 5 architectures x 10 configurations</span
+                    >
+                    edgebench run-all
+
+                    <span class="comment"
+                        ># regenerate every figure and table from stored
+                        records</span
+                    >
+                    edgebench report --results results
+                </div>
+
+                <h3>Output layout</h3>
+                <pre><code>results/
+├── figures/
+│   ├── accuracy_vs_latency.png            <span style="color:var(--fg-muted)"># the headline trade-off</span>
+│   ├── optimization_ladder__resnet18.png  <span style="color:var(--fg-muted)"># per-architecture deltas</span>
+│   ├── latency_distribution__resnet18.png <span style="color:var(--fg-muted)"># raw per-iteration spread</span>
+│   ├── size_vs_accuracy.png
+│   ├── resolution_sensitivity.png
+│   ├── batch_scaling.png
+│   └── per_class_accuracy.png
+├── tables/
+│   ├── main_comparison.md                 <span style="color:var(--fg-muted)"># paste-ready comparison</span>
+│   ├── frontier.md                        <span style="color:var(--fg-muted)"># only non-dominated configs</span>
+│   ├── optimization_status.md             <span style="color:var(--fg-muted)"># what ran, and why anything did not</span>
+│   └── environment.md
+└── raw/
+    └── resnet18__static_int8.json          <span style="color:var(--fg-muted)"># every measurement, traceable</span>
+</code></pre>
+            </section>
+
+            <!-- ==================== SCOPE ==================== -->
+            <section id="scope">
+                <h2>Scope and limitations</h2>
+                <p>
+                    Stated plainly, because a benchmark that does not bound its
+                    own claims is not useful.
+                </p>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Limitation</th>
+                                <th>Consequence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>One dataset, one task</td>
+                                <td>
+                                    CIFAR-10 classification. The methodology
+                                    transfers; the numbers do not.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Uniform training recipe</td>
+                                <td>
+                                    Makes rows comparable and differences
+                                    attributable, but under-tunes architectures
+                                    whose preferred recipe differs.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CPU only</td>
+                                <td>
+                                    GPUs and NPUs rank things differently. All
+                                    measured numbers are CPU-specific.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Block-sequential measurement</td>
+                                <td>
+                                    Configurations are measured in blocks rather
+                                    than fully interleaved. Close rankings
+                                    should be treated as unresolved; the
+                                    <code>Timing</code> column exists to make
+                                    that judgement possible.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Energy largely unmeasured</td>
+                                <td>
+                                    RAPL is Linux-only. This is the largest gap
+                                    in the metric set, and energy per inference
+                                    is arguably the metric that matters most on
+                                    a battery-limited device.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>No structured pruning</td>
+                                <td>
+                                    Correct channel pruning needs
+                                    dependency-aware surgery across residual
+                                    adds and concatenations. A wrong
+                                    implementation is worse than an absent one.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="wrap">
+                <div class="footer-links">
+                    <a
+                        href="https://github.com/raihan-sifat/edge-ai-deployment-study"
+                        >GitHub</a
+                    >
+                    <a href="REPORT.md">Technical report</a>
+                    <a href="METHODOLOGY.md">Methodology</a>
+                    <a
+                        href="https://github.com/raihan-sifat/edge-ai-deployment-study/blob/main/CITATION.cff"
+                        >Citation</a
+                    >
+                    <a
+                        href="https://github.com/raihan-sifat/edge-ai-deployment-study/blob/main/LICENSE"
+                        >MIT License</a
+                    >
+                </div>
+                <p style="margin: 0">
+                    A working project, not a published paper. Every measurement
+                    is reproducible from a single command, and every result is
+                    traceable to the run that produced it.
+                </p>
+            </div>
+        </footer>
+    </body>
+</html>

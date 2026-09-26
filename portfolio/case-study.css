@@ -1,0 +1,294 @@
+/* =============================================================================
+   Case study styles for the Edge AI benchmarking project.
+   
+   Self-contained and dependency-free: no Tailwind, no CSS framework. Every rule
+   is scoped under `.cs-` or is a bare element selector that only appears inside
+   the case study, so dropping this file into an existing site cannot disturb the
+   site's own typography.
+
+   Colours are declared as CSS custom properties and read from the host site when
+   available, so if your site already defines `--color-text` or similar the case
+   study inherits your palette. Otherwise the fallbacks below apply.
+
+   If your site has a dark mode, the `prefers-color-scheme` block at the bottom
+   handles it. If you use a class-based theme toggle (`.dark` on <html>), add
+   `.dark` alongside `@media (prefers-color-scheme: dark)` in that selector.
+   ========================================================================== */
+
+:root {
+    --cs-fg: var(--color-text, #1f2328);
+    --cs-fg-muted: var(--color-text-muted, #59636e);
+    --cs-bg: var(--color-bg, #ffffff);
+    --cs-bg-soft: var(--color-bg-subtle, #f6f8fa);
+    --cs-border: var(--color-border, #d1d9e0);
+    --cs-accent: var(--color-accent, #0969da);
+    --cs-good: #1a7f37;
+    --cs-bad: #cf222e;
+    --cs-warn-bg: #fff8c5;
+    --cs-warn-border: #d4a72c;
+    --cs-warn-fg: #4d2d00;
+    --cs-mono:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --cs-radius: 10px;
+}
+
+/* ---------------------------------------------------------------- warning -- */
+
+.cs-warning {
+    margin: 1.75rem 0;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid var(--cs-warn-border);
+    border-left-width: 3px;
+    border-radius: var(--cs-radius);
+    background: var(--cs-warn-bg);
+    color: var(--cs-warn-fg);
+    font-size: 0.93rem;
+    line-height: 1.55;
+}
+
+.cs-warning strong {
+    font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ stats -- */
+
+.cs-stats {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    background: var(--cs-border);
+    border: 1px solid var(--cs-border);
+    border-radius: var(--cs-radius);
+    overflow: hidden;
+    margin: 2rem 0;
+}
+
+.cs-stat {
+    background: var(--cs-bg);
+    padding: 1.1rem 1.2rem;
+}
+
+.cs-stat-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--cs-fg-muted);
+    margin-bottom: 0.3rem;
+}
+
+.cs-stat-value {
+    font-family: var(--cs-mono);
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--cs-fg);
+}
+
+.cs-stat-note {
+    font-size: 0.79rem;
+    line-height: 1.45;
+    color: var(--cs-fg-muted);
+    margin-top: 0.35rem;
+}
+
+/* ----------------------------------------------------------------- tables -- */
+
+.cs-table-wrap {
+    overflow-x: auto;
+    margin: 1.75rem 0;
+    border: 1px solid var(--cs-border);
+    border-radius: var(--cs-radius);
+    /* Keeps the rounded corners from being clipped by the scrolled content. */
+    -webkit-overflow-scrolling: touch;
+}
+
+.cs-table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 44rem;
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.cs-table th,
+.cs-table td {
+    padding: 0.58rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--cs-border);
+    vertical-align: baseline;
+}
+
+.cs-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--cs-bg-soft);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cs-fg-muted);
+    white-space: nowrap;
+}
+
+.cs-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.cs-table tbody tr:hover {
+    background: var(--cs-bg-soft);
+}
+
+.cs-table .cs-num {
+    text-align: right;
+    font-family: var(--cs-mono);
+    white-space: nowrap;
+}
+
+.cs-table .cs-good {
+    color: var(--cs-good);
+    font-weight: 600;
+}
+.cs-table .cs-bad {
+    color: var(--cs-bad);
+    font-weight: 600;
+}
+.cs-table .cs-mute {
+    color: var(--cs-fg-muted);
+}
+
+.cs-table code {
+    font-size: 0.86em;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--cs-bg-soft);
+}
+
+/* ---------------------------------------------------------------- figures -- */
+
+.cs-figure {
+    margin: 2rem 0;
+}
+
+.cs-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Charts are rendered on white, so give them a white plate in dark mode
+     rather than letting them float on a dark background. */
+    background: #ffffff;
+    border: 1px solid var(--cs-border);
+    border-radius: var(--cs-radius);
+}
+
+.cs-figure figcaption {
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--cs-fg-muted);
+}
+
+.cs-figure figcaption strong {
+    color: var(--cs-fg);
+}
+
+/* --------------------------------------------------------------- codeblocks */
+
+.cs-codeblock {
+    margin: 1.5rem 0;
+    border: 1px solid var(--cs-border);
+    border-radius: var(--cs-radius);
+    background: var(--cs-bg-soft);
+    overflow-x: auto;
+}
+
+.cs-codeblock pre {
+    margin: 0;
+    padding: 1rem 1.15rem;
+    font: 0.84rem/1.7 var(--cs-mono);
+    color: var(--cs-fg);
+}
+
+.cs-codeblock code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+.cs-repro {
+    margin: 2rem 0;
+    border: 1px solid var(--cs-border);
+    border-left: 3px solid var(--cs-accent);
+    border-radius: var(--cs-radius);
+    background: var(--cs-bg-soft);
+    padding: 1.1rem 1.25rem;
+}
+
+.cs-repro p {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.cs-repro pre {
+    margin: 0;
+    overflow-x: auto;
+    font: 0.8rem/1.75 var(--cs-mono);
+}
+
+.cs-repro code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+/* ------------------------------------------------------------ responsive -- */
+
+@media (max-width: 640px) {
+    .cs-stat-value {
+        font-size: 1.35rem;
+    }
+    .cs-table {
+        font-size: 0.82rem;
+    }
+    .cs-table th,
+    .cs-table td {
+        padding: 0.5rem 0.6rem;
+    }
+}
+
+/* -------------------------------------------------------------- dark mode -- */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cs-fg: var(--color-text, #e6edf3);
+        --cs-fg-muted: var(--color-text-muted, #9198a1);
+        --cs-bg: var(--color-bg, #0d1117);
+        --cs-bg-soft: var(--color-bg-subtle, #151b23);
+        --cs-border: var(--color-border, #3d444d);
+        --cs-accent: var(--color-accent, #4493f8);
+        --cs-good: #3fb950;
+        --cs-bad: #f85149;
+        --cs-warn-bg: #2b2307;
+        --cs-warn-border: #9e6a03;
+        --cs-warn-fg: #e3b341;
+    }
+
+    /* Charts have white backgrounds baked in; a slightly warm plate reads better
+     than a pure-white flash against a dark page. */
+    .cs-figure img {
+        background: #f6f8fa;
+    }
+}
+
+/* Print: keep figures from splitting across pages. */
+@media print {
+    .cs-figure,
+    .cs-table-wrap,
+    .cs-warning {
+        break-inside: avoid;
+    }
+    .cs-table thead th {
+        position: static;
+    }
+}

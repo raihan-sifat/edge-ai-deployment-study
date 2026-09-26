@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgebench"
+version = "0.1.0"
+description = "Reproducible CPU benchmarking harness for efficient deep learning models targeted at edge deployment."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Edge AI Deployment Study contributors" }]
+keywords = ["edge-ai", "benchmark", "pytorch", "quantization", "pruning", "efficient-ml"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch>=2.2",
+  "torchvision>=0.17",
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "matplotlib>=3.8",
+  "PyYAML>=6.0",
+  "tqdm>=4.66",
+  "psutil>=5.9",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+onnx = ["onnx>=1.15", "onnxruntime>=1.17"]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.5",
+  "pre-commit>=3.7",
+  "onnx>=1.15",
+  "onnxruntime>=1.17",
+]
+
+[project.scripts]
+edgebench = "edgebench.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/raihan-sifat/edge-ai-deployment-study"
+Repository = "https://github.com/raihan-sifat/edge-ai-deployment-study"
+Issues = "https://github.com/raihan-sifat/edge-ai-deployment-study/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "C4",  # flake8-comprehensions
+  "SIM", # flake8-simplify
+  "RUF", # ruff-specific
+]
+ignore = [
+  "E501", # line length handled by formatter
+  "B008", # typer uses function calls in argument defaults by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "network: marks tests that require downloading CIFAR-10",
+]
+
+[tool.coverage.run]
+source = ["src/edgebench"]
+omit = ["*/tests/*"]

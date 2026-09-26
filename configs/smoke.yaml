@@ -1,0 +1,58 @@
+# Fast smoke configuration: proves the whole pipeline runs in a couple of
+# minutes on any CPU, including CI. Results from this config are NOT meaningful
+# and must never be published -- they exist to validate plumbing.
+#
+#   edgebench run-all --config configs/smoke.yaml
+#
+seed: 0
+
+data:
+    name: cifar10
+    root: data
+    val_size: 1000
+    num_workers: 0
+    augment: false
+    download: true
+
+train:
+    epochs: 1
+    batch_size: 128
+    lr: 0.05
+    scheduler: none
+    warmup_epochs: 0
+    label_smoothing: 0.0
+    log_interval: 50
+    qat_epochs: 1
+    qat_lr: 1.0e-3
+
+benchmark:
+    device: cpu
+    resolutions: [32]
+    batch_sizes: [1, 8]
+    warmup_iters: 2
+    timed_iters: 5
+    repeats: 2
+    thread_counts: [1]
+
+optimizations:
+    - id: fp32
+      enabled: true
+    - id: compile
+      enabled: false # invoked explicitly by its own test
+    - id: dynamic_int8
+      enabled: true
+    - id: static_int8
+      enabled: false
+    - id: qat_int8
+      enabled: false
+    - id: prune_unstructured_50
+      enabled: true
+    - id: onnxruntime
+      enabled: true
+
+paths:
+    checkpoints: checkpoints/smoke
+    results: results/smoke
+    figures: results/smoke/figures
+    tables: results/smoke/tables
+    raw: results/smoke/raw

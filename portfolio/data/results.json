@@ -1,0 +1,255 @@
+{
+  "provisional": true,
+  "provisional_reason": "These numbers were produced on synthetic random tensors to validate the harness end to end. They are not measurements of model quality and must not be cited. Run `edgebench run-all` on the real dataset to replace them.",
+  "dataset": "synthetic",
+  "generated_at": "2026-09-26T06:49:17+00:00",
+  "environment": {
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12450H",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "logical_cores": 12,
+    "torch": "2.14.0+cpu",
+    "python": "3.14.5",
+    "onnxruntime": "1.30.0",
+    "git_commit": null
+  },
+  "implementation": {
+    "architectures": 5,
+    "optimizations": 10,
+    "resolutions": 2,
+    "batch_sizes": 3,
+    "thread_counts": 2,
+    "latency_cells_per_config": 12,
+    "tests": 172
+  },
+  "headline_config": {
+    "resolution": 32,
+    "batch_size": 1,
+    "num_threads": 1
+  },
+  "models": [
+    {
+      "id": "resnet18",
+      "name": "ResNet-18",
+      "params_millions": 11.17,
+      "macs_millions": 555.42,
+      "family": "cnn",
+      "adapt": "cifar"
+    }
+  ],
+  "headline": [
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "fp32",
+      "optimization": "FP32 (baseline)",
+      "status": "applied",
+      "top1_pct": 11.72,
+      "top1_delta_pp": 0.0,
+      "weight_mib": 42.7,
+      "size_reduction_pct": 0.0,
+      "latency_ms": 17.91,
+      "speedup": 1.0,
+      "ece": 0.0538,
+      "timing": "stable",
+      "unstable": false
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "qat_int8",
+      "optimization": "QAT INT8",
+      "status": "applied",
+      "top1_pct": 8.98,
+      "top1_delta_pp": -2.73,
+      "weight_mib": 10.78,
+      "size_reduction_pct": 74.75,
+      "latency_ms": 5.34,
+      "speedup": 3.35,
+      "ece": 0.0358,
+      "timing": "stable",
+      "unstable": false
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "static_int8",
+      "optimization": "Static INT8 (PTQ)",
+      "status": "applied",
+      "top1_pct": 10.74,
+      "top1_delta_pp": -0.98,
+      "weight_mib": 10.78,
+      "size_reduction_pct": 74.75,
+      "latency_ms": 5.75,
+      "speedup": 3.12,
+      "ece": 0.0602,
+      "timing": "stable",
+      "unstable": false
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "onnxruntime",
+      "optimization": "ONNX Runtime FP32",
+      "status": "applied",
+      "top1_pct": 11.72,
+      "top1_delta_pp": 0.0,
+      "weight_mib": 42.62,
+      "size_reduction_pct": 0.19,
+      "latency_ms": 20.82,
+      "speedup": 0.86,
+      "ece": 0.0538,
+      "timing": "unstable (cv=48%)",
+      "unstable": true
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "dynamic_int8",
+      "optimization": "Dynamic INT8",
+      "status": "applied",
+      "top1_pct": 11.52,
+      "top1_delta_pp": -0.2,
+      "weight_mib": 42.68,
+      "size_reduction_pct": 0.03,
+      "latency_ms": 23.3,
+      "speedup": 0.77,
+      "ece": 0.0553,
+      "timing": "unstable (cv=39%)",
+      "unstable": true
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "prune_unstructured_50",
+      "optimization": "Prune 50%",
+      "status": "applied",
+      "top1_pct": 11.72,
+      "top1_delta_pp": 0.0,
+      "weight_mib": 42.7,
+      "size_reduction_pct": 0.0,
+      "latency_ms": 74.44,
+      "speedup": 0.24,
+      "ece": 0.0581,
+      "timing": "stable",
+      "unstable": false
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "onnxruntime_int8",
+      "optimization": "ONNX Runtime INT8",
+      "status": "applied",
+      "top1_pct": 11.13,
+      "top1_delta_pp": -0.59,
+      "weight_mib": 10.71,
+      "size_reduction_pct": 74.93,
+      "latency_ms": 165.32,
+      "speedup": 0.11,
+      "ece": 0.0595,
+      "timing": "stable",
+      "unstable": false
+    },
+    {
+      "model_id": "resnet18",
+      "model": "ResNet-18",
+      "optimization_id": "compile",
+      "optimization": "torch.compile",
+      "status": "unavailable",
+      "top1_pct": null,
+      "top1_delta_pp": null,
+      "weight_mib": null,
+      "size_reduction_pct": null,
+      "latency_ms": null,
+      "speedup": null,
+      "ece": null,
+      "timing": "not measured",
+      "unstable": false
+    }
+  ],
+  "best_per_model": [
+    {
+      "model": "ResNet-18",
+      "optimization": "QAT INT8",
+      "speedup": 3.35,
+      "size_reduction_pct": 74.75,
+      "top1_delta_pp": -2.73
+    }
+  ],
+  "unavailable": [
+    {
+      "model": "ResNet-18",
+      "optimization": "torch.compile",
+      "reason": "no working torch.compile backend on this machine: InvalidCxxCompiler: Compiler: cl is not found."
+    }
+  ],
+  "figures": {
+    "accuracy_vs_latency": {
+      "caption": "Accuracy against single-thread batch-1 latency",
+      "alt": "Scatter plot of test accuracy against latency for every model and optimization, one connected series per architecture, on a logarithmic latency axis. Static INT8 points sit far to the left of their FP32 counterparts.",
+      "available": true,
+      "webp": "./images/accuracy_vs_latency.webp",
+      "png": "./images/accuracy_vs_latency.png",
+      "converted": true,
+      "original_width": 1659
+    },
+    "optimization_ladder__resnet18": {
+      "caption": "Per-optimization speedup and accuracy change for ResNet-18",
+      "alt": "Two stacked bar charts for ResNet-18: speedup relative to FP32 above, and change in accuracy in percentage points below. Static and QAT INT8 show roughly three times speedup; dynamic INT8 sits below 1.0.",
+      "available": true,
+      "webp": "./images/optimization_ladder__resnet18.webp",
+      "png": "./images/optimization_ladder__resnet18.png",
+      "converted": true,
+      "original_width": 1659
+    },
+    "latency_distribution__resnet18": {
+      "caption": "Latency distribution across optimizations",
+      "alt": "Box plots of individual per-iteration latency samples for each optimization, with the raw samples overlaid as jittered points, showing the spread that a single median would hide.",
+      "available": true,
+      "webp": "./images/latency_distribution__resnet18.webp",
+      "png": "./images/latency_distribution__resnet18.png",
+      "converted": true,
+      "original_width": 1658
+    },
+    "size_vs_accuracy": {
+      "caption": "Model size against accuracy, with marker area proportional to MACs",
+      "alt": "Scatter plot of serialized weight size against test accuracy on a logarithmic size axis, with marker area proportional to multiply-accumulates.",
+      "available": true,
+      "webp": "./images/size_vs_accuracy.webp",
+      "png": "./images/size_vs_accuracy.png",
+      "converted": true,
+      "original_width": 1659
+    },
+    "per_class_accuracy": {
+      "caption": "Per-class accuracy change relative to each model's FP32 baseline",
+      "alt": "Heatmap of per-class accuracy change in percentage points, one row per model and optimization, showing that aggregate accuracy hides class-specific degradation.",
+      "available": true,
+      "webp": "./images/per_class_accuracy.webp",
+      "png": "./images/per_class_accuracy.png",
+      "converted": true,
+      "original_width": 1783
+    },
+    "resolution_sensitivity": {
+      "caption": "Latency at 32x32 versus 224x224",
+      "alt": "Grouped bar chart of FP32 latency at each measured input resolution on a logarithmic axis. 224x224 has 49 times the pixels but does not cost 49 times the latency.",
+      "available": true,
+      "webp": "./images/resolution_sensitivity.webp",
+      "png": "./images/resolution_sensitivity.png",
+      "converted": true,
+      "original_width": 1658
+    },
+    "batch_scaling": {
+      "caption": "Throughput against batch size",
+      "alt": "Line chart of throughput in images per second against batch size on logarithmic axes, one line per model and optimization.",
+      "available": true,
+      "webp": "./images/batch_scaling.webp",
+      "png": "./images/batch_scaling.png",
+      "converted": true,
+      "original_width": 1658
+    }
+  },
+  "counts": {
+    "records": 8,
+    "applied": 7,
+    "not_applied": 1
+  }
+}

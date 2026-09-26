@@ -1,0 +1,23 @@
+# Runtime dependencies for the Edge AI Deployment Study.
+#
+# Install the CPU-only PyTorch wheel on Windows/Linux where no NVIDIA GPU is
+# present (this is the primary target for this study):
+#
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+#
+torch>=2.2
+torchvision>=0.17
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.8
+PyYAML>=6.0
+tqdm>=4.66
+psutil>=5.9
+typer>=0.12
+
+# Optional but strongly recommended: real ONNX Runtime speedups on x86 CPUs.
+# If these fail to install the harness degrades gracefully and reports the
+# `onnxruntime` optimization as "unavailable".
+onnx>=1.15
+onnxruntime>=1.17

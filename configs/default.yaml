@@ -1,0 +1,104 @@
+# =============================================================================
+# Default configuration for the Edge AI Deployment Study benchmark harness.
+#
+# Every value here can be overridden from the CLI. Precedence, lowest to
+# highest: this file  ->  --config overrides  ->  explicit CLI flags.
+# =============================================================================
+
+seed: 1234
+
+# -----------------------------------------------------------------------------
+# Dataset
+# -----------------------------------------------------------------------------
+data:
+    name: cifar10
+    root: data
+    # Hold out `val_size` examples from the official train split so that model
+    # selection never touches the 10k test images. The test split is used exactly
+    # once per configuration, at the end, for the reported accuracy.
+    val_size: 5000
+    num_workers: 2
+    augment: true
+    download: true
+    # Normalization constants for CIFAR-10 (computed over the train split).
+    mean: [0.4914, 0.4822, 0.4465]
+    std: [0.2470, 0.2435, 0.2616]
+
+# -----------------------------------------------------------------------------
+# Training
+# -----------------------------------------------------------------------------
+train:
+    epochs: 30
+    batch_size: 128
+    optimizer: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 5.0e-4
+    nesterov: true
+    scheduler: cosine
+    warmup_epochs: 1
+    label_smoothing: 0.1
+    grad_clip: 1.0
+    log_interval: 100
+    # Quantization-aware training fine-tunes a trained checkpoint for a few epochs.
+    qat_epochs: 3
+    qat_lr: 1.0e-3
+
+# -----------------------------------------------------------------------------
+# Benchmark protocol
+# -----------------------------------------------------------------------------
+benchmark:
+    device: cpu
+    # 32 matches the training resolution; 224 is the resolution these
+    # architectures were designed for and is what an edge deployment usually
+    # receives. Measuring both exposes the resolution sensitivity of the ranking.
+    resolutions: [32, 224]
+    batch_sizes: [1, 8, 32]
+    # Discarded iterations that let allocators, caches and kernels reach steady
+    # state before anything is recorded.
+    warmup_iters: 10
+    # Timed iterations per repeat.
+    timed_iters: 50
+    # Independent repeats. We report the distribution across repeats, not a
+    # single best-case number.
+    repeats: 5
+    # Thread counts to sweep. `null` means "the default set by the OS/PyTorch".
+    # Single-thread numbers are the honest proxy for a small edge core.
+    thread_counts: [1, null]
+    # Keep CPU frequency scaling from turning latency into a random variable.
+    # Reported but not enforced (enforcing requires root on Linux).
+    report_affinity: true
+
+# -----------------------------------------------------------------------------
+# Optimization ladder
+#
+# Each entry is applied to the trained FP32 model, then re-evaluated and
+# re-benchmarked. Unavailable optimizations (e.g. torch.compile without Triton
+# on Windows, or ONNX Runtime not installed) are recorded with an explicit
+# reason instead of silently disappearing.
+# -----------------------------------------------------------------------------
+optimizations:
+    - id: fp32
+      enabled: true
+    - id: compile
+      enabled: true
+    - id: dynamic_int8
+      enabled: true
+    - id: static_int8
+      enabled: true
+    - id: qat_int8
+      enabled: true
+    - id: prune_unstructured_50
+      enabled: true
+    - id: onnxruntime
+      enabled: true
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+    checkpoints: checkpoints
+    results: results
+    figures: results/figures
+    tables: results/tables
+    raw: results/raw

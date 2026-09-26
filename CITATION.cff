@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this benchmark harness or its reported measurements, please cite the repository."
+title: "Benchmarking Efficient Deep Learning Models for Edge AI Deployment"
+type: software
+authors:
+    - name: "Edge AI Deployment Study contributors"
+abstract: >-
+    A reproducible CPU benchmarking harness that measures accuracy, latency,
+    throughput, model footprint and peak memory for efficient convolutional
+    architectures under a ladder of deployment optimizations (torch.compile,
+    INT8 dynamic and static quantization, quantization-aware training,
+    magnitude pruning and ONNX Runtime).
+version: 0.1.0
+date-released: "2026-09-26"
+license: MIT
+repository-artifact: "https://github.com/raihan-sifat/edge-ai-deployment-study"
+keywords:
+    - edge ai
+    - benchmarking
+    - pytorch
+    - quantization
+    - pruning
+    - efficient deep learning

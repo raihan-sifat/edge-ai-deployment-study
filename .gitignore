@@ -1,0 +1,77 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# --- Virtual environments ---------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Packaging / tooling caches ---------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# --- Data and checkpoints (reproducible, never commit) ----------------------
+# Rooted with a leading slash on purpose. A bare `data/` matches *any* directory
+# named `data` at any depth, which silently excluded portfolio/data/ — the
+# generated JSON the case study renders from.
+/data/
+/checkpoints/
+
+# --- Generated artifacts ----------------------------------------------------
+# Raw run records, per-run figures and per-run tables are ignored so the repo
+# stays small and reviewable. Curated, committed output lives in
+# results/reference/ and portfolio/, both of which are generated once and
+# reviewed before committing.
+results/raw/
+results/figures/*
+!results/figures/.gitkeep
+results/tables/*
+!results/tables/.gitkeep
+
+# Throwaway configs (offline validation, smoke runs) produce throwaway results.
+results/offline/
+results/smoke/
+*.log
+run-debug.log
+
+# --- Report build output ----------------------------------------------------
+# REPORT.md is the source of truth; these are build products. A stale PDF is
+# worse than no PDF, so neither is committed.
+docs/report.html
+docs/report.pdf
+
+# --- Node (only used to validate the portfolio MDX) -------------------------
+# scripts/validate_case_study.mjs needs three npm packages installed with
+# --no-save. Nothing here is a project dependency and nothing is committed.
+node_modules/
+package-lock.json
+.package-lock.json
+
+# --- Notebooks --------------------------------------------------------------
+.ipynb_checkpoints/
+
+# --- Editors ----------------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

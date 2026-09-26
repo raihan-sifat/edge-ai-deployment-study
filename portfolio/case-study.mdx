@@ -1,0 +1,447 @@
+---
+title: "Benchmarking Efficient Models for Edge AI"
+description: "I built a reproducible CPU harness to measure what actually happens when you compress a neural network for the edge — and found three cases where the standard advice fails."
+date: 2026-09-26
+tags:
+    ["Edge AI", "Model Compression", "PyTorch", "Benchmarking", "Quantization"]
+cover: "./images/accuracy_vs_latency.webp"
+coverAlt: "Accuracy against latency for five architectures across ten deployment optimizations."
+featured: true
+repo: "https://github.com/raihan-sifat/edge-ai-deployment-study"
+projectPage: "https://raihan-sifat.github.io/edge-ai-deployment-study/"
+report: "https://github.com/raihan-sifat/edge-ai-deployment-study/blob/main/docs/REPORT.md"
+
+# ----- adjust these two to match your site's conventions -----
+layout: "../../layouts/CaseStudy.astro" # Astro. Next.js: delete this line.
+# slug: "edge-ai-benchmarking"            # Next.js: uncomment and delete `layout`.
+---
+
+import results from "./data/results.json";
+
+export const headline = results.headline.filter(
+    (row) => row.status === "applied",
+);
+export const fmt = (value, digits = 2) =>
+    value === null || value === undefined ? "—" : Number(value).toFixed(digits);
+export const fig = (name) => results.figures[name] ?? { available: false };
+
+{/* ---------------------------------------------------------------- */}
+{/* Provisional-data guard. Delete once you have run the real study. */}
+{/* ---------------------------------------------------------------- */}
+{results.provisional && (
+
+  <aside className="cs-warning">
+    <strong>Provisional numbers.</strong> {results.provisional_reason}
+  </aside>
+)}
+
+## The problem with "just quantize it"
+
+The standard advice for deploying a model to an edge device is a short list. Pick an
+efficient architecture. Quantize to INT8. Compile the graph. Prune the weights. Use an
+optimized runtime.
+
+Every item is individually well-supported. Applied together, the advice is
+underspecified in ways that matter — because **"quantize to INT8" describes at least four
+different procedures**, and they do not all behave the same way.
+
+I wanted to know which of these actually deliver, by how much, and what they cost in
+accuracy. So I built a harness that measures them all under one protocol and reports the
+results that contradict expectations.
+
+<div className="cs-stats">
+    <div className="cs-stat">
+        <div className="cs-stat-label">Architectures</div>
+        <div className="cs-stat-value">
+            {results.implementation.architectures}
+        </div>
+        <div className="cs-stat-note">
+            ResNet-18, MobileNetV2, MobileNetV3-S, ShuffleNetV2, EfficientNet-B0
+        </div>
+    </div>
+    <div className="cs-stat">
+        <div className="cs-stat-label">Optimizations</div>
+        <div className="cs-stat-value">
+            {results.implementation.optimizations}
+        </div>
+        <div className="cs-stat-note">
+            Compilation, 4× quantization, pruning, 2× ONNX Runtime
+        </div>
+    </div>
+    <div className="cs-stat">
+        <div className="cs-stat-label">Latency cells</div>
+        <div className="cs-stat-value">
+            {results.implementation.latency_cells_per_config}
+        </div>
+        <div className="cs-stat-note">
+            Per configuration: {results.implementation.resolutions} resolutions
+            × {results.implementation.batch_sizes} batch sizes ×{" "}
+            {results.implementation.thread_counts} thread counts
+        </div>
+    </div>
+    <div className="cs-stat">
+        <div className="cs-stat-label">Tests</div>
+        <div className="cs-stat-value">{results.implementation.tests}</div>
+        <div className="cs-stat-note">
+            Covering config, models, training, benchmarks and optimizations
+        </div>
+    </div>
+</div>
+
+## Three things the advice gets wrong
+
+### 1. Dynamic INT8 quantization made the model _slower_
+
+This is the one that surprised me most, and it is the most common real-world trap.
+
+Dynamic quantization converts `Linear` layers but leaves `Conv2d` in FP32 on this PyTorch
+build. A convolutional network holds the overwhelming majority of its parameters in
+convolutions — so the model barely shrank, while every batch paid added
+quantize/dequantize work.
+
+**Result: {fmt(results.headline.find((r) => r.optimization_id === "dynamic_int8")?.speedup)}× speedup** —
+that is, slower than FP32, with negligible size reduction.
+
+The harness detects this rather than hiding it. It inspects the build's own dynamic
+quantization mappings, and when convolutions are excluded the result carries an explicit
+note that it describes _classifier_ quantization, not model quantization. Without that
+check the number would look like a property of dynamic quantization in general.
+
+### 2. Unstructured pruning delivered neither compression nor speedup
+
+Pruning is usually presented as a compression technique. At 50% sparsity, global
+magnitude pruning produced a model statistically indistinguishable from FP32 in **both**
+size and latency. Three independent reasons:
+
+- **Dense storage ignores zeros.** `torch.save` writes dense tensors; zeroing values
+  changes neither the shapes nor the file size.
+- **Dense kernels ignore sparsity.** oneDNN and MKL-DNN convolution paths have no
+  sparsity fast path for arbitrary masks. Measured: **{fmt(results.headline.find((r) => r.optimization_id === "prune_unstructured_50")?.speedup)}×**.
+- **Sparse encoding loses at 50%.** A 32-bit value plus a 32-bit index costs 8 bytes per
+  surviving weight against 4 bytes dense. Break-even is _exactly_ 50% sparsity, and row
+  pointers tip it marginally the wrong way there.
+
+So the encoding overhead is the reason unstructured pruning is not a compression
+technique as usually applied — and that is a property of the storage format, not of the
+pruning algorithm.
+
+### 3. My own first measurement was off by 404%
+
+This is the finding that changed how the harness is built.
+
+My first full sequential run reported pruning as **4.16× slower** than FP32. That is
+implausible: pruning leaves dense tensors, so dense kernels must be unaffected.
+
+I re-measured the same two models interleaved, in opposite orders:
+
+<div className="cs-codeblock">
+<pre><code>{`order A: fp32 (18.14 ms) then prune50 (18.17 ms)
+order B: prune50 (17.95 ms) then fp32 (17.24 ms)
+order C: fp32 (18.07 ms) then prune50 (19.00 ms)
+
+prune50 / fp32 median ratio: 1.01x
+within-configuration spread : 5.8% of median`}</code></pre>
+
+</div>
+
+The true effect is **1.01×**. The 4.16× was drift in machine state over the ~5 minutes of
+sequential measurement — thermal throttling plus background load.
+
+The protocol looked entirely reasonable: warm-up iterations, many timed iterations,
+multiple repeats, medians, percentile reporting. **None of that catches drift _between_
+configurations**, because each configuration is internally self-consistent and
+individually looks stable.
+
+Three things followed, and the harness now does all three:
+
+1. **Record dispersion.** Every cell stores its coefficient of variation.
+2. **Flag it.** Tables mark `cv > 15%` as `unstable` rather than averaging it away.
+3. **Publish the negative result.** A benchmark that reports a 4.16× effect which does
+   not exist is worse than one that reports nothing, and the failure mode is silent.
+
+## What actually works
+
+Post-training **static** quantization, with activation ranges calibrated on held-out
+validation data, gave the largest speedup of any rung — **{fmt(results.headline.find((r) => r.optimization_id === "static_int8")?.speedup)}×** — together with a
+{fmt(Math.abs(results.headline.find((r) => r.optimization_id === "static_int8")?.size_reduction_pct ?? 0), 0)}% reduction in serialized weight size.
+
+**Quantization-aware training** recovered more of the accuracy at the cost of a one-time
+fine-tuning pass. It is the only rung that consumes training compute at optimization
+time, and that cost is recorded separately — it is excluded from the latency figures
+because it is not inference, but it is a real deployment cost.
+
+Two caveats I state rather than bury:
+
+- FX graph mode performs **conv+BN+ReLU fusion** automatically, so part of this speedup
+  is fusion, not precision. Both belong in a realistic pipeline, but attributing the
+  whole effect to INT8 would be wrong.
+- The accuracy cost is **architecture-dependent**. MobileNetV3's hard-swish and
+  EfficientNet's swish activations have long tails that INT8 ranges represent poorly, so
+  they lose more than ResNet-18 does.
+
+## Results
+
+Measured at batch 1 on a single thread at 32×32 — the least flattering configuration
+available, and the closest analogue to a small edge core serving one request at a time.
+Single-thread matters because on a CPU the thread count moves latency more than several
+of the optimizations being compared.
+
+<div className="cs-table-wrap">
+    <table className="cs-table">
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Optimization</th>
+                <th className="cs-num">Weights</th>
+                <th className="cs-num">Size Δ</th>
+                <th className="cs-num">Accuracy</th>
+                <th className="cs-num">Δ Accuracy</th>
+                <th className="cs-num">Latency p50</th>
+                <th className="cs-num">Speedup</th>
+            </tr>
+        </thead>
+        <tbody>
+            {headline.map((row) => (
+                <tr key={`${row.model_id}-${row.optimization_id}`}>
+                    <td>{row.model}</td>
+                    <td>
+                        <code>{row.optimization}</code>
+                    </td>
+                    <td className="cs-num">{fmt(row.weight_mib, 1)} MiB</td>
+                    <td
+                        className={
+                            row.size_reduction_pct > 1
+                                ? "cs-num cs-good"
+                                : "cs-num cs-mute"
+                        }
+                    >
+                        {row.size_reduction_pct === 0
+                            ? "—"
+                            : `${fmt(row.size_reduction_pct, 1)}%`}
+                    </td>
+                    <td className="cs-num">{fmt(row.top1_pct)}%</td>
+                    <td className="cs-num">
+                        {row.top1_delta_pp === 0
+                            ? "—"
+                            : `${fmt(row.top1_delta_pp)} pp`}
+                    </td>
+                    <td className="cs-num">{fmt(row.latency_ms)} ms</td>
+                    <td
+                        className={
+                            row.speedup >= 1.05
+                                ? "cs-num cs-good"
+                                : row.speedup < 0.95
+                                  ? "cs-num cs-bad"
+                                  : "cs-num"
+                        }
+                    >
+                        {fmt(row.speedup)}×
+                    </td>
+                </tr>
+            ))}
+        </tbody>
+    </table>
+</div>
+
+{results.counts.not_applied > 0 && (
+
+  <>
+    <h3>Not measured</h3>
+    <p>
+      An optimization that cannot run on a machine is recorded with its reason and appears
+      as an explicit gap. It never silently disappears from the results.
+    </p>
+    <ul>
+      {results.unavailable.map((item, index) => (
+        <li key={index}>
+          <code>{item.optimization}</code> — {item.reason}
+        </li>
+      ))}
+    </ul>
+  </>
+)}
+
+## The figures
+
+{fig("accuracy_vs_latency").available && (
+
+  <figure className="cs-figure">
+    <img
+      src={fig("accuracy_vs_latency").webp}
+      alt={fig("accuracy_vs_latency").alt}
+      width="1600"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>
+      <strong>Accuracy vs latency.</strong> The headline trade-off. Static INT8 sits far to
+      the left of FP32; dynamic INT8 moves the wrong way; the FP32 points stay put.
+    </figcaption>
+  </figure>
+)}
+
+{fig("optimization_ladder\_\_resnet18").available && (
+
+  <figure className="cs-figure">
+    <img
+      src={fig("optimization_ladder__resnet18").webp}
+      alt={fig("optimization_ladder__resnet18").alt}
+      width="1600"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>
+      <strong>The ladder, per optimization.</strong> Speedup above, accuracy change in
+      percentage points below. Two panels rather than a dual axis, which would invite
+      misreading the crossing point.
+    </figcaption>
+  </figure>
+)}
+
+{fig("latency_distribution\_\_resnet18").available && (
+
+  <figure className="cs-figure">
+    <img
+      src={fig("latency_distribution__resnet18").webp}
+      alt={fig("latency_distribution__resnet18").alt}
+      width="1600"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>
+      <strong>Every sample, not just the median.</strong> A wide box or a long upper tail is
+      a bigger practical problem than a slightly higher median — and it is exactly what a
+      summary table hides.
+    </figcaption>
+  </figure>
+)}
+
+{fig("size_vs_accuracy").available && (
+
+  <figure className="cs-figure">
+    <img
+      src={fig("size_vs_accuracy").webp}
+      alt={fig("size_vs_accuracy").alt}
+      width="1600"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>
+      <strong>Size vs accuracy.</strong> Marker area is proportional to MACs, so position
+      and size together say what a model costs in flash, accuracy and compute.
+    </figcaption>
+  </figure>
+)}
+
+{fig("per_class_accuracy").available && (
+
+  <figure className="cs-figure">
+    <img
+      src={fig("per_class_accuracy").webp}
+      alt={fig("per_class_accuracy").alt}
+      width="1600"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>
+      <strong>Where quantization hurts.</strong> Aggregate accuracy hides a model that
+      collapses on one or two classes — usually unacceptable in practice, and invisible in
+      a single top-1 number.
+    </figcaption>
+  </figure>
+)}
+
+## Why the numbers are trustworthy
+
+Most benchmark write-ups report one number per configuration from one run on one machine.
+I built this around the ways that goes wrong.
+
+| Risk                            | How it is handled                                                                                                                                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Test-set contamination**      | A seeded permutation carves 5,000 images out of the _train_ split for validation. Quantizer calibration draws from that split, never the test set. The 10,000 test images are measured exactly once per configuration. |
+| **Measurement-order artifacts** | Every cell records its coefficient of variation; anything above 15% is flagged `unstable` rather than averaged away.                                                                                                   |
+| **Hidden unavailability**       | An optimization that cannot run is recorded with its reason and shown as an explicit gap.                                                                                                                              |
+| **Unit ambiguity**              | MACs ≠ FLOPs and the two differ by 2×. One convention is fixed globally and stated in the output itself.                                                                                                               |
+| **Irreproducible environments** | Every record embeds CPU model, thread count, library versions, OS and git commit.                                                                                                                                      |
+| **Fabricated metrics**          | Energy is measured only where a real hardware counter exists. On Windows and macOS it reports `not measured` with the reason, instead of deriving a number from CPU utilisation.                                       |
+
+Two protocol decisions worth calling out. **Latency is reported across a grid, not as one
+number** — every configuration is measured at two resolutions (32×32 and 224×224, which is
+49× the pixels), three batch sizes and two thread counts. And **both per-iteration and
+block timing are recorded**, because below roughly 0.1 ms per inference the per-iteration
+timer itself becomes a material part of the measurement.
+
+## Engineering notes
+
+Three decisions shaped most of the code, each because of a failure mode rather than a
+preference.
+
+**The optimization ladder is fault tolerant by construction.** Every optimization returns
+a status of `applied`, `unavailable` or `failed`, with a machine-readable reason. A
+missing dependency costs one row of the results table, never the run. That is what makes
+the negative results reportable — without it, an optimization that fails on your machine
+simply vanishes and you report a smaller matrix without noticing. Each rung also runs on
+an independent deep copy, which makes the ladder order-independent.
+
+**Reporting is a pure function of stored results.** Records are written to disk the moment
+they are produced, so a sweep that dies at hour three still leaves three hours of usable
+data. No forward pass runs to build a chart, so every table and figure regenerates on any
+machine from `results/raw/` alone — no model, no dataset, no GPU.
+
+**Unmeasurable metrics are reported as unmeasurable.** No energy counter means
+`not measured`, not an estimate from CPU utilisation. A benchmark whose weakest metric is
+fabricated stops being a benchmark.
+
+The environment: {results.environment.cpu}, {results.environment.logical_cores} logical
+cores, PyTorch {results.environment.torch} on Python {results.environment.python}.
+
+## What I would tell you if you were deploying this
+
+- **Measure on your own target.** These numbers are CPU-specific. An ARM device will rank
+  things differently — particularly dynamic quantization and `qnnpack`-backed kernels.
+- **Check what your stack supports first.** `torch.compile` was unavailable on my machine
+  because Inductor needs a working C++ toolchain. Knowing that _before_ a multi-hour sweep
+  is worth more than the sweep itself.
+- **Prefer static quantization over dynamic** for convolutional networks. Dynamic
+  quantization is cheap to apply and, as measured here, can cost you latency.
+- **Do not expect pruning to save you anything** unless you have a kernel that exploits
+  sparsity, or you go past 50% and store sparsely.
+- **Interleave your measurements.** If you benchmark configurations in sequential blocks,
+  you are partly measuring your machine's thermal history.
+
+## Limitations
+
+CIFAR-10 classification, CPU only, five architectures. The training recipe is uniform
+across architectures, which makes rows comparable and differences attributable but
+under-tunes any architecture whose preferred recipe differs. Results are measured in
+sequential blocks, so close rankings should be treated as unresolved — the `Timing` column
+exists to make that judgment possible. Energy is largely unmeasured, which is the largest
+gap in the metric set. Structured pruning is deliberately not implemented: correct channel
+pruning needs dependency-aware surgery across residual adds and concatenations, and a
+wrong implementation would be worse than an absent one.
+
+This is a working project, not a peer-reviewed paper.
+
+## Links
+
+- **[Source on GitHub](https://github.com/raihan-sifat/edge-ai-deployment-study)** —
+  the harness, {results.implementation.tests} tests, and CI on Python 3.10–3.12
+- **[Full interactive project page](https://raihan-sifat.github.io/edge-ai-deployment-study/)** —
+  all figures and the complete results tables
+- **[Technical report](https://github.com/raihan-sifat/edge-ai-deployment-study/blob/main/docs/REPORT.md)** —
+  the long-form write-up with the sparse-storage break-even derivation
+- **[Methodology](https://github.com/raihan-sifat/edge-ai-deployment-study/blob/main/docs/METHODOLOGY.md)** —
+  the full protocol and threats to validity
+
+<div className="cs-repro">
+<p>Reproduce it in a few commands:</p>
+<pre><code>{`pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -e ".[onnx,dev]"
+
+edgebench info # what can this machine measure?
+edgebench run-all --config configs/offline.yaml # validate the pipeline, offline
+python scripts/check_measurement_order.py # check measurement stability
+edgebench run-all # the study
+edgebench report --results results # regenerate every figure and table`}</code></pre>
+
+</div>

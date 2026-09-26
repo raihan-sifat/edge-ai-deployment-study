@@ -1,0 +1,46 @@
+# =============================================================================
+# Model zoo under study.
+#
+# All entries are torchvision constructors. `adapt: cifar` rewrites the
+# ImageNet classification stem (7x7 stride-2 conv + max-pool, or an equivalent
+# aggressive downsample) to a stride-1 3x3 conv with no max-pool. Without this
+# the spatial resolution collapses from 32x32 to 1x1 before the last stage and
+# accuracy on CIFAR-10 is poor. The classifier head is always replaced for
+# `data.num_classes` outputs.
+# =============================================================================
+
+models:
+    - id: resnet18
+      enabled: true
+      family: cnn
+      torchvision_name: resnet18
+      adapt: cifar
+      notes: "Reference accuracy/throughput baseline. 11.7M parameters."
+
+    - id: mobilenet_v2
+      enabled: true
+      family: cnn
+      torchvision_name: mobilenet_v2
+      adapt: cifar
+      notes: "Inverted residuals + depthwise separable convolutions, ReLU6."
+
+    - id: mobilenet_v3_small
+      enabled: true
+      family: cnn
+      torchvision_name: mobilenet_v3_small
+      adapt: cifar
+      notes: "Squeeze-and-excitation + hard-swish; smallest model in the study."
+
+    - id: shufflenet_v2
+      enabled: true
+      family: cnn
+      torchvision_name: shufflenet_v2_x1_0
+      adapt: cifar
+      notes: "Channel shuffle, trained with a reduced-width 1.0x variant."
+
+    - id: efficientnet_b0
+      enabled: true
+      family: cnn
+      torchvision_name: efficientnet_b0
+      adapt: cifar
+      notes: "Compound-scaled baseline; largest in the study at ~5.3M parameters."
