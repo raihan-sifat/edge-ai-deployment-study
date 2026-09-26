@@ -197,7 +197,7 @@ Placeholders to replace in `case-study.mdx`:
 
 | Placeholder               | Where                                                               |
 | ------------------------- | ------------------------------------------------------------------- |
-| `raihan-sifat`           | front matter `repo`, `projectPage`, `report`, and the Links section |
+| `raihan-sifat`            | front matter `repo`, `projectPage`, `report`, and the Links section |
 | The canonical project URL | Links section — points at your GitHub Pages page                    |
 | `layout:`                 | front matter (Astro only)                                           |
 

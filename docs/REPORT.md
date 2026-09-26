@@ -412,7 +412,7 @@ Source, configuration, tests (222, run in CI across Python 3.10–3.12), and the
 measurement-stability diagnostic are in the repository. Two auxiliary configurations
 ship: `configs/smoke.yaml` for a real-data CI run against CIFAR-10, and
 `configs/offline.yaml` for full-ladder validation on synthetic data with no network
-access. The CI pipeline also asserts on the *content* of a run -- record counts,
+access. The CI pipeline also asserts on the _content_ of a run -- record counts,
 retained latency samples, plausibility of a one-epoch accuracy -- because both
 `run-all` and `report` deliberately exit zero when they produce nothing, making an
 exit-code check meaningless.
