@@ -1,0 +1,130 @@
+name: Study (real CIFAR-10)
+
+# Manual only. A full sweep is far too slow for every push, and the inputs that
+# matter -- which models, how many epochs, which resolutions -- are a judgement
+# call about how much compute to spend.
+#
+# Purpose: produce genuinely measured accuracy on the real dataset without
+# spending hours on a local machine. Download the artifacts from the run to
+# replace the provisional portfolio assets with real ones.
+#
+# Accuracy numbers from this workflow are exact and trustworthy: the training is
+# deterministic given the seed. Latency numbers are real measurements but taken
+# on a virtualised shared host, so they carry more dispersion than a quiet
+# machine. The harness measures that dispersion itself and flags any cell whose
+# coefficient of variation exceeds 15% as `unstable`, so the tables state which
+# latency rows to distrust rather than leaving it to the reader to guess.
+#
+# Nothing here is marked provisional. That flag is reserved for synthetic runs,
+# and conflating "measured on a noisy VM" with "not measured at all" would
+# defeat the point of having the flag.
+
+on:
+    workflow_dispatch:
+        inputs:
+            models:
+                description: "Comma-separated model ids"
+                required: true
+                default: "resnet18,mobilenet_v2,mobilenet_v3_small"
+                type: string
+            optimizations:
+                description: "Comma-separated optimization ids"
+                required: true
+                default: "fp32,dynamic_int8,static_int8,qat_int8,prune_unstructured_50,onnxruntime"
+                type: string
+            epochs:
+                description: "Training epochs (10 is a CI-friendly compromise; 30 gives the best numbers)"
+                required: true
+                default: "10"
+                type: string
+            resolutions:
+                description: "Benchmark resolutions as a YAML list, e.g. [32] or [32,224]"
+                required: true
+                default: "[32]"
+                type: string
+
+concurrency:
+    group: study-${{ github.ref }}
+    cancel-in-progress: false
+
+env:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PYTHONUNBUFFERED: "1"
+
+jobs:
+    study:
+        name: Run the study on real data
+        runs-on: ubuntu-latest
+        timeout-minutes: 300
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-python@v7
+              with:
+                  python-version: "3.11"
+                  cache: pip
+
+            - name: Install CPU PyTorch
+              run: |
+                  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+            - name: Install package
+              run: |
+                  pip install -e ".[onnx]"
+
+            - name: Cache CIFAR-10
+              uses: actions/cache@v6
+              with:
+                  path: data
+                  key: cifar10-torchvision-v1
+
+            - name: Report what this runner can measure
+              run: |
+                  edgebench info --config configs/study.yaml
+
+            - name: Train and benchmark
+              run: |
+                  edgebench run-all \
+                    --config configs/study.yaml \
+                    --models "${{ inputs.models }}" \
+                    --optimizations "${{ inputs.optimizations }}" \
+                    --set train.epochs=${{ inputs.epochs }} \
+                    --set benchmark.resolutions=${{ inputs.resolutions }} \
+                    --no-memory \
+                    --no-report
+
+            - name: Build the report
+              run: edgebench report --results results/study
+
+            - name: Export portfolio assets from the real run
+              run: python scripts/export_portfolio_assets.py --results results/study
+
+            - name: Verify the results are real and the provisional guard did not fire
+              run: python scripts/ci_assert_study.py
+
+            - name: Summarise into the job summary
+              if: always()
+              run: python scripts/ci_summarise_study.py >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload the full results
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: study-results
+                  path: |
+                      results/study/raw
+                      results/study/tables
+                      results/study/figures
+                  if-no-files-found: warn
+                  retention-days: 90
+
+            - name: Upload the portfolio assets, ready to commit
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: portfolio-assets
+                  path: |
+                      portfolio/data
+                      portfolio/images
+                  if-no-files-found: warn
+                  retention-days: 90

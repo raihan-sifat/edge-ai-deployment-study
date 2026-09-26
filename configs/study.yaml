@@ -1,0 +1,96 @@
+# =============================================================================
+# Real CIFAR-10 study configuration.
+#
+# This is the config to use when you want *publishable* numbers rather than a
+# pipeline validation. It trains on the real dataset, so the accuracy figures it
+# produces are genuine measurements and the portfolio export will NOT be flagged
+# provisional.
+#
+# Scoped to be affordable: the full 5-model x 10-optimization x 12-cell matrix
+# with a 30-epoch schedule is hours of compute. The defaults here are chosen to
+# finish on a 4-core CI runner in roughly half an hour while still producing
+# credible accuracy. Override anything from the CLI:
+#
+#   edgebench run-all --config configs/study.yaml --set train.epochs=30
+#   edgebench run-all --config configs/study.yaml \
+#     --models resnet18,mobilenet_v2,mobilenet_v3_small
+#
+# A note on latency measured on a shared CI runner: the values are real
+# measurements, but a virtualised shared host is noisier than a quiet machine, so
+# the coefficient of variation will be higher and more cells will be flagged
+# `unstable` in the tables. That flag is the guard working correctly -- accuracy
+# is unaffected and remains trustworthy, latency is indicative rather than
+# precise. For publishable latency, run this config locally on a quiet machine
+# and compare the CV columns between the two runs.
+# =============================================================================
+
+seed: 1234
+
+data:
+    name: cifar10
+    root: data
+    # Held out from the train split; used for model selection and quantizer
+    # calibration. The 10k test split is measured once per configuration.
+    val_size: 5000
+    num_workers: 2
+    augment: true
+    download: true
+
+train:
+    # 10 epochs is a deliberate compromise: enough for credible accuracy on
+    # CIFAR-10, few enough to finish in CI. Raise to 30 for the best numbers.
+    epochs: 10
+    batch_size: 128
+    optimizer: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 5.0e-4
+    nesterov: true
+    scheduler: cosine
+    warmup_epochs: 1
+    label_smoothing: 0.1
+    grad_clip: 1.0
+    log_interval: 200
+    qat_epochs: 2
+    qat_lr: 1.0e-3
+
+benchmark:
+    device: cpu
+    # 224x224 is where these architectures were designed to run and is what an edge
+    # deployment usually receives, but it is ~10x the latency measurement cost of
+    # 32x32. Enable it explicitly when you want the resolution-sensitivity figure:
+    #   --set benchmark.resolutions=[32,224]
+    resolutions: [32]
+    batch_sizes: [1, 8]
+    warmup_iters: 10
+    timed_iters: 50
+    repeats: 5
+    thread_counts: [1, null]
+    report_affinity: true
+
+# The full ladder. Rungs that cannot run on the host are recorded as
+# `unavailable` with a reason and appear as explicit gaps in the tables.
+optimizations:
+    - id: fp32
+      enabled: true
+    - id: compile
+      enabled: true
+    - id: dynamic_int8
+      enabled: true
+    - id: static_int8
+      enabled: true
+    - id: qat_int8
+      enabled: true
+    - id: prune_unstructured_50
+      enabled: true
+    - id: onnxruntime
+      enabled: true
+    - id: onnxruntime_int8
+      enabled: true
+
+paths:
+    checkpoints: checkpoints/study
+    results: results/study
+    figures: results/study/figures
+    tables: results/study/tables
+    raw: results/study/raw
