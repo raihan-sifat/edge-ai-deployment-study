@@ -256,13 +256,15 @@ The `results.json` shape is documented below so you can type it precisely.
     },
 
     "implementation": {
-        "architectures": 5,
-        "optimizations": 10,
-        "resolutions": 2,
-        "batch_sizes": 3,
+        // Counted from the records, so the page cannot claim scope the run did
+        // not cover. The values below describe a 3-model, 6-rung study.
+        "architectures": 3,
+        "optimizations": 6,
+        "resolutions": 1,
+        "batch_sizes": 2,
         "thread_counts": 2,
-        "latency_cells_per_config": 12,
-        "tests": 222, // counted from pytest, not hardcoded
+        "latency_cells_per_config": 4, // resolutions x batch_sizes x thread_counts
+        "tests": 277, // counted from pytest, not hardcoded
     },
 
     "headline_config": { "resolution": 32, "batch_size": 1, "num_threads": 1 },

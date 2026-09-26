@@ -124,9 +124,19 @@ MODEL_DISPLAY: dict[str, str] = {
     "efficientnet_b0": "EfficientNet-B0",
 }
 
-#: Counts that describe the harness itself rather than any run. Kept here so the
-#: case study has one place to read them from.
-IMPLEMENTATION_FACTS = {
+#: What the harness is *capable* of covering: 5 architectures against 8 registered
+#: optimization rungs, at up to 2 resolutions x 3 batch sizes x 2 thread settings.
+#:
+#: This is a capability ceiling, NOT a description of any particular run. A run
+#: normally exercises less of it -- the CI study uses 3 models and 6 rungs. These
+#: numbers are therefore only a fallback for when no records exist at all; a real
+#: run reports what it measured. See `_measured_scope`.
+#:
+#: This distinction is not pedantic. Reporting the capability counts as though they
+#: described the run put "5 architectures" and "12 latency cells per configuration"
+#: on the case study for a run that measured 3 and 4. That is the same class of
+#: overstatement the provisional guard exists to prevent, just harder to notice.
+HARNESS_CAPABILITY = {
     "architectures": 5,
     "optimizations": 10,
     "resolutions": 2,
@@ -230,6 +240,63 @@ def read_run_config(results_dir: Path) -> dict[str, Any]:
     return {}
 
 
+def _measured_scope(store: Any) -> dict[str, int]:
+    """Count what this run actually covered, not what the harness could cover.
+
+    Distinct model and rung ids come straight from the records. The latency
+    dimensions are read from the cells that completed, so a run that never
+    reached a resolution does not claim it.
+
+    ``num_threads`` is deliberately counted with ``None`` as a distinct value:
+    this harness stores ``None`` to mean "let the runtime choose" (reported as
+    "auto"), which is a real measurement setting rather than a missing one. The
+    key is tested for presence so an absent field is not silently read as auto.
+    """
+    records = list(getattr(store, "records", None) or [])
+    if not records:
+        return dict(HARNESS_CAPABILITY)
+
+    resolutions: set[Any] = set()
+    batch_sizes: set[Any] = set()
+    thread_settings: set[Any] = set()
+
+    for record in records:
+        for cell in getattr(record, "latency", None) or []:
+            if cell.get("status") != "ok":
+                continue
+            if cell.get("resolution") is not None:
+                resolutions.add(cell["resolution"])
+            if cell.get("batch_size") is not None:
+                batch_sizes.add(cell["batch_size"])
+            if "num_threads" in cell:
+                thread_settings.add(cell["num_threads"])
+
+    scope = {
+        "architectures": len({record.model_id for record in records}),
+        "optimizations": len({record.optimization_id for record in records}),
+        # Fall back per-dimension: a run that recorded no latency cells at all
+        # still has a meaningful binary footprint worth reporting.
+        "resolutions": len(resolutions) or HARNESS_CAPABILITY["resolutions"],
+        "batch_sizes": len(batch_sizes) or HARNESS_CAPABILITY["batch_sizes"],
+        "thread_counts": len(thread_settings) or HARNESS_CAPABILITY["thread_counts"],
+    }
+    return scope
+
+
+def _display_path(path: Path) -> str:
+    """Repo-relative path when possible, absolute otherwise.
+
+    ``--out`` may legitimately point outside the repository (a scratch directory,
+    for instance), and ``Path.relative_to`` raises ``ValueError`` rather than
+    returning something sensible. A crash while *printing progress* is a silly way
+    to lose an export that has already succeeded.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _round(value: Any, digits: int = 2) -> Any:
     if value is None:
         return None
@@ -250,6 +317,10 @@ def build_payload(results_dir: Path, figures: dict[str, Any]) -> dict[str, Any]:
     frame = store.summary_frame()
     environment = store.environment()
     fingerprint = environment.get("fingerprint", {}) or {}
+
+    # What this run actually measured. Reported instead of the harness's capability
+    # so the case study cannot claim a scope the run did not cover.
+    scope = _measured_scope(store)
 
     run_config = read_run_config(results_dir)
     dataset_name = (
@@ -364,11 +435,9 @@ def build_payload(results_dir: Path, figures: dict[str, Any]) -> dict[str, Any]:
             "git_commit": environment.get("git_commit"),
         },
         "implementation": {
-            **IMPLEMENTATION_FACTS,
+            **scope,
             "latency_cells_per_config": (
-                IMPLEMENTATION_FACTS["resolutions"]
-                * IMPLEMENTATION_FACTS["batch_sizes"]
-                * IMPLEMENTATION_FACTS["thread_counts"]
+                scope["resolutions"] * scope["batch_sizes"] * scope["thread_counts"]
             ),
             "tests": _count_tests(),
         },
@@ -471,7 +540,7 @@ def main() -> int:
         print("      run `edgebench report --results ...` to generate them first.")
         figures_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Reading {results_dir.relative_to(REPO_ROOT)}")
+    print(f"Reading {_display_path(results_dir)}")
     figures = build_figure_block(figures_dir, images_dir, args.width, args.quality)
     payload = build_payload(results_dir, figures)
 
@@ -482,13 +551,13 @@ def main() -> int:
     print("Exported portfolio assets")
     print("-" * 56)
     available = sum(1 for value in figures.values() if value.get("available"))
-    print(f"  figures        {available}/{len(FIGURE_SPEC)} -> {images_dir.relative_to(REPO_ROOT)}")
+    print(f"  figures        {available}/{len(FIGURE_SPEC)} -> {_display_path(images_dir)}")
     print(
         f"  records        {payload['counts']['records']} ({payload['counts']['applied']} applied)"
     )
     print(f"  models         {len(payload['models'])}")
     print(f"  dataset        {payload['dataset']}")
-    print(f"  data           {output_path.relative_to(REPO_ROOT)}")
+    print(f"  data           {_display_path(output_path)}")
 
     if payload["provisional"]:
         print()

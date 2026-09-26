@@ -5,7 +5,7 @@ date: 2026-09-26
 tags:
     ["Edge AI", "Model Compression", "PyTorch", "Benchmarking", "Quantization"]
 cover: "./images/accuracy_vs_latency.webp"
-coverAlt: "Accuracy against latency for five architectures across ten deployment optimizations."
+coverAlt: "Accuracy against latency for each architecture across the deployment optimizations that were measured."
 featured: true
 repo: "https://github.com/raihan-sifat/edge-ai-deployment-study"
 projectPage: "https://raihan-sifat.github.io/edge-ai-deployment-study/"
@@ -65,7 +65,15 @@ results that contradict expectations.
             {results.implementation.optimizations}
         </div>
         <div className="cs-stat-note">
-            Compilation, 4× quantization, pruning, 2× ONNX Runtime
+            {/* Derived from the results, not written by hand: a hardcoded list
+                here would go on claiming rungs the run never covered. */}
+            {[
+                ...new Set(
+                    [...headline, ...results.unavailable].map(
+                        (row) => row.optimization,
+                    ),
+                ),
+            ].join(", ")}
         </div>
     </div>
     <div className="cs-stat">
