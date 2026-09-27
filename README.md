@@ -215,6 +215,35 @@ elsewhere:
 edgebench report --results results
 ```
 
+## Tech stack
+
+Everything runs on commodity **CPU-only** hardware — no GPU, no cloud, no paid
+services. The stack is deliberately small so the harness installs and reproduces on
+a laptop.
+
+| Layer                         | Tools                                                                                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language & runtime**        | Python 3.10–3.12 (`requires-python = ">=3.10"`), Node.js ESM (portfolio validation only)                                                                                                 |
+| **Deep learning**             | PyTorch ≥2.2 (CPU wheels), torchvision ≥0.17, CIFAR-10                                                                                                                                   |
+| **Optimization & deployment** | `torch.compile` (Inductor), PyTorch quantization (dynamic INT8, FX graph-mode static PTQ, QAT; `onednn` backend), global magnitude unstructured pruning, ONNX ≥1.15 + ONNX Runtime ≥1.17 |
+| **Numerics & data**           | NumPy ≥1.24, pandas ≥2.0, PyYAML ≥6.0 (strict typed config)                                                                                                                              |
+| **Measurement**               | Custom latency protocol (p50–p99 + CV), `psutil` for peak RSS, MAC counting, Linux RAPL for energy                                                                                       |
+| **Reporting & figures**       | Matplotlib ≥3.8, Pillow (WebP export), Markdown/CSV table writers, stdlib Markdown→HTML renderer with optional Pandoc + LaTeX                                                            |
+| **CLI & tooling**             | Typer ≥0.12, `tqdm`, `setuptools` (editable install), `edgebench` console script                                                                                                         |
+| **Quality & CI**              | `pytest` + `pytest-cov`, Ruff (lint + format), `pre-commit`, GitHub Actions (Python 3.10/3.11/3.12 matrix, offline smoke pipeline, real-data path)                                       |
+| **Portfolio & docs**          | MDX + self-contained CSS (Astro/Next.js compatible), `@mdx-js/mdx` + `remark-frontmatter` / `remark-mdx-frontmatter` for validation, BibTeX (`references.bib`)                           |
+
+A few notes on the choices:
+
+- **CPU-only PyTorch** keeps the numbers honest for an edge target and makes the
+  whole study runnable without special hardware.
+- **ONNX and ONNX Runtime are optional.** If they fail to install the harness degrades
+  gracefully and records the optimization as `unavailable` rather than crashing.
+- **Energy metering uses RAPL** where a real hardware counter exists (Linux). On
+  Windows and macOS it reports `not measured` instead of inventing a number.
+- **The portfolio assets are framework-agnostic** — plain MDX and CSS that drop into
+  an existing Astro or Next.js site, with no Tailwind or component library required.
+
 ## Project layout
 
 ```
